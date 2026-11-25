@@ -43,6 +43,7 @@ data/raw/npz/
 data/raw/c3d/
 data/raw/txt/
 data/video/
+data/uploads/
 
 # Processed large binaries — keep CSVs/parquet, skip heavy npz outputs
 data/processed/**/*.npz
