@@ -55,8 +55,10 @@ data/processed/**/*.npy
 *.onnx
 *.weights
 
-# Outputs — keep structure, skip generated plots and large reports
+# Outputs — keep structure, skip generated plots and reports
 outputs/figures/
+outputs/reports/individual/
+outputs/reports/professional/
 outputs/reports/*.pdf
 outputs/reports/*.html
 
