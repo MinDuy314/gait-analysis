@@ -76,6 +76,34 @@ class RecordingRepository:
     def list_for_session(self, session_id: str) -> List[Recording]:
         return self.db.query(Recording).filter(Recording.session_id == session_id, Recording.is_deleted == False).all()
 
+    def update_validation(
+        self,
+        recording_id: str,
+        status: str,
+        message: Optional[str] = None,
+        duration_seconds: Optional[float] = None,
+        fps: Optional[float] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+    ) -> bool:
+        """Persist video validation status and extracted metadata."""
+        r = self.get(recording_id)
+        if not r:
+            return False
+        r.validation_status = status
+        if message is not None:
+            r.validation_message = message
+        if duration_seconds is not None:
+            r.duration_seconds = duration_seconds
+        if fps is not None:
+            r.fps = fps
+        if width is not None:
+            r.width = width
+        if height is not None:
+            r.height = height
+        self.db.commit()
+        return True
+
     def update_annotation(
         self,
         recording_id: str,

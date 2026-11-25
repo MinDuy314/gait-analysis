@@ -75,3 +75,4 @@ secrets.yaml
 *.db
 *.sqlite
 *.sqlite3
+outputs/verification/

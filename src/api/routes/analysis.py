@@ -46,6 +46,7 @@ def submit_analysis(
         subject_id=sess.subject_id,
         camera_view=payload.camera_view,
         pose_model=payload.pose_model,
+        recording_id=payload.recording_id,
     )
     db.refresh(job)
     return job

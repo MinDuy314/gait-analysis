@@ -1,7 +1,7 @@
 """Task registry and end-to-end analysis orchestration."""
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from src.core.logging import get_logger
 from src.database.repositories import JobRepository, RecordingRepository
 from src.database.models import AssessmentRecord
@@ -40,8 +40,9 @@ def run_analysis_pipeline(
     recording_id: Optional[str] = None,
     **kwargs,
 ):
-    """Full pipeline task. Saves partial results on each stage completion."""
+    """Full pipeline task. Executes real video pipeline and saves stage progress."""
     repo = JobRepository(db)
+    rec_repo = RecordingRepository(db)
     partial_results: Dict[str, Any] = {
         "stages_completed": [],
         "features": {},
@@ -56,35 +57,107 @@ def run_analysis_pipeline(
         p = pct if pct is not None else _stage_progress(stage)
         repo.update_status(job_id, "running", stage=stage, progress=p, result=partial_results)
 
+    poses: List[Any] = []
+    n_cycles: int = 0
+    effective_camera_view: str = camera_view
+
     try:
         # Stage 1: Validate recording
         _update("validate_recording")
         if recording_path:
-            try:
-                from src.video.video_validator import VideoValidator
-                validator = VideoValidator()
-                val_result = validator.validate(recording_path)
-                partial_results["video_validation"] = {"status": "passed"} if val_result else {"status": "failed"}
-            except Exception as e:
-                partial_results["video_validation"] = {"status": "error", "message": str(e)}
-        partial_results["stages_completed"].append("validate_recording")
+            path_obj = Path(recording_path)
+            from src.video.video_validator import validate_video
+            val_result = validate_video(path_obj)
 
-        # Stage 2-8: Execution stages
-        for stage in PIPELINE_STAGES[1:8]:
-            _update(stage)
-            partial_results["stages_completed"].append(stage)
+            # Persist validation status to Recording model
+            if recording_id:
+                meta = val_result.metadata
+                rec_repo.update_validation(
+                    recording_id=recording_id,
+                    status="passed" if val_result.is_valid else "failed",
+                    message="; ".join([i.message for i in val_result.issues]) if val_result.issues else None,
+                    duration_seconds=meta.duration_seconds if meta else None,
+                    fps=meta.fps if meta else None,
+                    width=meta.width if meta else None,
+                    height=meta.height if meta else None,
+                )
 
-        # Extracted features
-        partial_results["features"] = {
-            "cadence_steps_per_min": 110.0,
-            "stride_time_mean": 1.09,
-            "knee_flexion_rom": 58.0,
-        }
-        partial_results["confidences"] = {
-            "cadence_steps_per_min": 0.85,
-            "stride_time_mean": 0.80,
-            "knee_flexion_rom": 0.65,
-        }
+            if not val_result.is_valid:
+                critical_issues = [i.message for i in val_result.issues if i.severity == "critical"]
+                all_issues = critical_issues or [i.message for i in val_result.issues] or ["Video failed validation"]
+                err_msg = "; ".join(all_issues)
+                partial_results["video_validation"] = {
+                    "status": "failed",
+                    "issues": [i.model_dump() for i in val_result.issues],
+                }
+                if recording_id:
+                    rec_repo.update_annotation(
+                        recording_id=recording_id,
+                        annotated_video_path=None,
+                        annotation_status="failed",
+                    )
+                partial_results["annotation_status"] = "failed"
+                repo.update_status(
+                    job_id,
+                    "failed",
+                    stage="validate_recording",
+                    error=f"Video validation failed: {err_msg}",
+                    result=partial_results,
+                )
+                logger.warning("Job %s stopped due to video validation failure: %s", job_id, err_msg)
+                return
+
+            partial_results["video_validation"] = {"status": "passed"}
+            partial_results["stages_completed"].append("validate_recording")
+
+            # Stages 2-8: Execute real video pipeline (pose estimation, view detection, events, cycles, features)
+            _update("extract_frames")
+            from src.video.video_pipeline_runner import process_video_pipeline
+            pipeline_result = process_video_pipeline(
+                video_path=path_obj,
+                session_id=session_id,
+                estimator_type=pose_model,
+            )
+
+            poses = pipeline_result.poses
+            n_cycles = len(pipeline_result.gait_cycles)
+            if pipeline_result.camera_view.predicted_view != "unknown":
+                effective_camera_view = pipeline_result.camera_view.predicted_view
+
+            for stage in PIPELINE_STAGES[1:8]:
+                _update(stage)
+                partial_results["stages_completed"].append(stage)
+
+            # Map genuinely calculated metrics only — never hardcode fake values
+            extracted_features: Dict[str, Any] = {}
+            extracted_confidences: Dict[str, float] = {}
+            for m in pipeline_result.measurements:
+                if m.value is not None:
+                    extracted_features[m.feature_name] = m.value
+                    extracted_confidences[m.feature_name] = m.confidence
+                    if m.feature_name == "cadence":
+                        extracted_features["cadence_steps_per_min"] = m.value
+                        extracted_confidences["cadence_steps_per_min"] = m.confidence
+                    elif m.feature_name == "gait_cycle_duration":
+                        extracted_features["stride_time_mean"] = m.value
+                        extracted_confidences["stride_time_mean"] = m.confidence
+                        if m.cycle_consistency_sd is not None:
+                            extracted_features["stride_time_sd"] = m.cycle_consistency_sd
+                            extracted_confidences["stride_time_sd"] = m.confidence
+                    elif "knee_flexion_extension_rom" in m.feature_name:
+                        if "knee_flexion_rom" not in extracted_features:
+                            extracted_features["knee_flexion_rom"] = m.value
+                            extracted_confidences["knee_flexion_rom"] = m.confidence
+
+            partial_results["features"] = extracted_features
+            partial_results["confidences"] = extracted_confidences
+
+        else:
+            # No video recording provided (e.g. lightweight session tests)
+            for stage in PIPELINE_STAGES[0:8]:
+                partial_results["stages_completed"].append(stage)
+            partial_results["features"] = {}
+            partial_results["confidences"] = {}
 
         # Stage 9: Assessment
         _update("assess")
@@ -93,7 +166,7 @@ def run_analysis_pipeline(
         ctx = AssessmentContext(
             subject_id=subject_id,
             session_id=session_id,
-            camera_view=camera_view,
+            camera_view=effective_camera_view,
             pose_model=pose_model,
             pose_model_version=pose_model_version,
         )
@@ -102,7 +175,7 @@ def run_analysis_pipeline(
             context=ctx,
             features=partial_results["features"],
             confidences=partial_results["confidences"],
-            n_cycles=3,
+            n_cycles=n_cycles,
         )
         partial_results["assessment"] = assessment.model_dump(mode="json")
         partial_results["stages_completed"].append("assess")
@@ -135,7 +208,8 @@ def run_analysis_pipeline(
         partial_results["stages_completed"].append("generate_reports")
 
         # ------------------------------------------------------------------ #
-        # Optional annotation stage — failure does NOT fail the whole job.    #
+        # Optional annotation stage — failure does NOT fail the whole job.   #
+        # Reuses the exact poses from the single inference pass above.       #
         # ------------------------------------------------------------------ #
         if recording_path and recording_id:
             _annotate_recording(
@@ -143,6 +217,7 @@ def run_analysis_pipeline(
                 recording_path=recording_path,
                 recording_id=recording_id,
                 partial_results=partial_results,
+                poses=poses,
             )
 
         # Stage 11: Finalize
@@ -155,7 +230,16 @@ def run_analysis_pipeline(
     except Exception as exc:
         logger.exception("Pipeline failed at stage for job %s: %s", job_id, exc)
         db.rollback()
-        repo.update_status(job_id, "partially_completed", error=str(exc), result=partial_results)
+        repo.update_status(job_id, "failed", error=str(exc), result=partial_results)
+        if recording_id:
+            try:
+                rec_repo.update_annotation(
+                    recording_id=recording_id,
+                    annotated_video_path=None,
+                    annotation_status="failed",
+                )
+            except Exception:
+                pass
         raise
 
 
@@ -168,12 +252,13 @@ def _annotate_recording(
     recording_path: str,
     recording_id: str,
     partial_results: Dict[str, Any],
+    poses: Optional[List[Any]] = None,
 ) -> None:
-    """Run annotation as an optional pipeline stage.
+    """Run annotation reusing existing poses from the single inference pass.
 
     Populates partial_results["annotation_status"] and
-    partial_results["annotated_video_path"].  Persists to DB via
-    RecordingRepository.  Any failure is caught, logged, and recorded
+    partial_results["annotated_video_path"]. Persists to DB via
+    RecordingRepository. Any failure is caught, logged, and recorded
     as annotation_status="failed" — the job itself still completes.
     """
     from src.visualization.video_annotator import annotate_video
@@ -186,12 +271,11 @@ def _annotate_recording(
         src_path = Path(recording_path)
         out_path = src_path.parent / f"annotated_{src_path.name}"
 
-        # Annotation with empty pose list → blank frames (safe fallback)
-        poses = partial_results.get("_poses", [])  # populated if real pipeline ran
+        poses_to_use = poses if poses is not None else []
 
         annotated_path = annotate_video(
             video_path=src_path,
-            poses=poses,
+            poses=poses_to_use,
             output_path=out_path,
         )
 

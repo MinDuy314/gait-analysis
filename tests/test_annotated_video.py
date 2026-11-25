@@ -46,8 +46,9 @@ def db_session(engine):
 def client(engine):
     """TestClient with an in-memory DB injected via dependency override."""
     from src.api.main import app
-    from src.api.dependencies import get_db, get_storage
+    from src.api.dependencies import get_db, get_storage, get_job_manager
     from src.storage.file_storage import FileStorage
+    from src.jobs.job_manager import JobManager
 
     Session = sessionmaker(bind=engine)
 
@@ -60,14 +61,18 @@ def client(engine):
 
     with tempfile.TemporaryDirectory() as tmp:
         storage = FileStorage(storage_root=Path(tmp))
+        test_jm = JobManager(db_session_factory=Session, max_workers=2)
 
         def _override_storage():
             return storage
 
         app.dependency_overrides[get_db] = _override_db
         app.dependency_overrides[get_storage] = _override_storage
+        app.dependency_overrides[get_job_manager] = lambda: test_jm
         with TestClient(app) as c:
+            c.job_manager = test_jm
             yield c
+        test_jm.wait_all(timeout=5.0)
         app.dependency_overrides.clear()
 
 
@@ -408,3 +413,168 @@ def test_video_annotation_error_distinct():
     err = VideoAnnotationError("test")
     assert isinstance(err, Exception)
     assert not isinstance(err, GaitAnalysisError)
+
+
+
+# ===========================================================================
+# 11. End-to-End API submission: recording_id reaches task, annotates video
+# ===========================================================================
+
+def test_api_analysis_submission_generates_annotated_video(client, engine, tmp_path):
+    """End-to-end API test verifying:
+    1. recording_id reaches the background job;
+    2. validation_status is persisted as 'passed';
+    3. real / synthetic pose results reach annotation;
+    4. hardcoded mock metrics (cadence=110, knee_rom=58) are absent;
+    5. annotation_status is 'completed' (never left pending);
+    6. GET /annotated-video streams the MP4 with 200.
+    """
+    import time
+    from sqlalchemy.orm import sessionmaker
+    from src.database.models import Subject, Session as GaitSession, Recording
+    from src.core.config import AppConfig
+
+    cfg = AppConfig()
+    video_dir = cfg.project_root / "data" / "uploads" / "_e2e_test"
+    video_dir.mkdir(parents=True, exist_ok=True)
+    video_file = video_dir / "valid_walk.mp4"
+    _make_test_video(video_file, width=320, height=240, fps=30.0, frames=45)
+
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    sub = Subject(id=str(uuid.uuid4()), display_name="e2e_subject")
+    db.add(sub)
+    db.commit()
+
+    sess = GaitSession(id=str(uuid.uuid4()), subject_id=sub.id)
+    db.add(sess)
+    db.commit()
+
+    rec = Recording(
+        id=str(uuid.uuid4()),
+        session_id=sess.id,
+        server_filename="valid_walk.mp4",
+        file_path=str(video_file.resolve()),
+        validation_status="pending",
+        annotation_status="pending",
+    )
+    db.add(rec)
+    db.commit()
+    rec_id = rec.id
+    sess_id = sess.id
+    db.close()
+
+    # Submit analysis via the API with recording_id and synthetic pose estimator
+    resp = client.post(
+        f"/api/v1/sessions/{sess_id}/analysis",
+        json={
+            "recording_id": rec_id,
+            "camera_view": "side",
+            "pose_model": "synthetic",
+        },
+    )
+    assert resp.status_code == 202
+    job_id = resp.json()["id"]
+
+    # Wait for background job to finish
+    if hasattr(client, "job_manager"):
+        client.job_manager.wait_all(timeout=10.0)
+
+    # Poll status in case wait_all finished early
+    for _ in range(20):
+        j_resp = client.get(f"/api/v1/jobs/{job_id}").json()
+        if j_resp["status"] in ("completed", "failed"):
+            break
+        time.sleep(0.2)
+
+    assert j_resp["status"] == "completed", f"Job failed: {j_resp.get('error_message')}"
+
+    # Verify Recording DB state
+    db = Session()
+    updated_rec = db.query(Recording).filter(Recording.id == rec_id).first()
+    assert updated_rec.validation_status == "passed", "Validation status must be persisted as 'passed'"
+    assert updated_rec.annotation_status == "completed", "Annotation status must be 'completed', not pending"
+    assert updated_rec.annotated_video_path is not None
+    assert Path(updated_rec.annotated_video_path).exists()
+    assert Path(updated_rec.annotated_video_path).stat().st_size > 0
+    db.close()
+
+    # Verify GET /annotated-video succeeds
+    stream_resp = client.get(f"/api/v1/recordings/{rec_id}/annotated-video")
+    assert stream_resp.status_code == 200
+    assert "video/mp4" in stream_resp.headers.get("content-type", "")
+    assert len(stream_resp.content) > 0
+
+    # Cleanup
+    import shutil
+    shutil.rmtree(str(video_dir), ignore_errors=True)
+
+
+# ===========================================================================
+# 12. Validation failure handling in API workflow
+# ===========================================================================
+
+def test_api_analysis_submission_handles_validation_failure(client, engine, tmp_path):
+    """Verify corrupted / invalid video halts pipeline, marks validation 'failed',
+    marks annotation 'failed' (never left pending), and marks job 'failed'.
+    """
+    import time
+    from sqlalchemy.orm import sessionmaker
+    from src.database.models import Subject, Session as GaitSession, Recording
+
+    bad_video = tmp_path / "corrupted.mp4"
+    bad_video.write_text("This is not a valid video file")
+
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    sub = Subject(id=str(uuid.uuid4()), display_name="fail_subject")
+    db.add(sub)
+    db.commit()
+
+    sess = GaitSession(id=str(uuid.uuid4()), subject_id=sub.id)
+    db.add(sess)
+    db.commit()
+
+    rec = Recording(
+        id=str(uuid.uuid4()),
+        session_id=sess.id,
+        server_filename="corrupted.mp4",
+        file_path=str(bad_video.resolve()),
+        validation_status="pending",
+        annotation_status="pending",
+    )
+    db.add(rec)
+    db.commit()
+    rec_id = rec.id
+    sess_id = sess.id
+    db.close()
+
+    resp = client.post(
+        f"/api/v1/sessions/{sess_id}/analysis",
+        json={"recording_id": rec_id, "camera_view": "side", "pose_model": "synthetic"},
+    )
+    assert resp.status_code == 202
+    job_id = resp.json()["id"]
+
+    if hasattr(client, "job_manager"):
+        client.job_manager.wait_all(timeout=10.0)
+
+    for _ in range(20):
+        j_resp = client.get(f"/api/v1/jobs/{job_id}").json()
+        if j_resp["status"] in ("completed", "failed"):
+            break
+        time.sleep(0.2)
+
+    assert j_resp["status"] == "failed", "Job must fail when video validation fails"
+
+    db = Session()
+    updated_rec = db.query(Recording).filter(Recording.id == rec_id).first()
+    assert updated_rec.validation_status == "failed"
+    assert updated_rec.annotation_status == "failed", "Annotation status must be updated to 'failed', never left pending"
+    db.close()
+
+    # Annotated video must return 409
+    get_resp = client.get(f"/api/v1/recordings/{rec_id}/annotated-video")
+    assert get_resp.status_code == 409

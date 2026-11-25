@@ -32,6 +32,7 @@ class VideoAnalysisResult(BaseModel):
     model_name: str
     device: str
     total_frames_extracted: int
+    poses: List[FramePose] = Field(default_factory=list)
     gait_events: List[GaitEvent] = Field(default_factory=list)
     gait_cycles: List[GaitCycle] = Field(default_factory=list)
     measurements: List[VideoGaitFeature] = Field(default_factory=list)
@@ -114,6 +115,7 @@ def process_video_pipeline(
         model_name=estimator.model_name,
         device=estimator.device,
         total_frames_extracted=len(poses),
+        poses=poses,
         gait_events=events,
         gait_cycles=cycles,
         measurements=features,
@@ -127,7 +129,7 @@ def process_video_pipeline(
 
     out_json = proc_dir / "metadata" / f"{path_obj.stem}_analysis.json"
     with open(out_json, "w", encoding="utf-8") as f:
-        f.write(result.model_dump_json(indent=2))
+        f.write(result.model_dump_json(indent=2, exclude={"poses"}))
 
     if features:
         feat_df = pd.DataFrame([m.model_dump(exclude={"normalized_101_curve"}) for m in features])
