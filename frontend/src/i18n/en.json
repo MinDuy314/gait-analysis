@@ -14,6 +14,8 @@
     "role_individual": "Individual / Patient",
     "role_professional": "Clinician / Professional",
     "loginTitle": "Sign in to Gait Analysis",
+    "welcomeBack": "Welcome back",
+    "welcomeSubtitle": "Sign in to access your gait analysis dashboard and patient assessments.",
     "registerTitle": "Create your account",
     "loginButton": "Sign in",
     "registerButton": "Create account",

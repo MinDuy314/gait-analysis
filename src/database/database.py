@@ -46,4 +46,33 @@ def init_db(db_url: str = None):
             except Exception:
                 pass  # Column already exists — no action needed.
 
+    # Seed default demonstration accounts if no users exist
+    from src.database.models import User
+    from src.api.auth.security import hash_password
+    import uuid
+    from datetime import datetime
+    Session = get_session_factory(db_url)
+    with Session() as sess:
+        if sess.query(User).count() == 0:
+            clinician = User(
+                id=str(uuid.uuid4()),
+                username="dr_smith",
+                email="dr.smith@biomechanics.org",
+                hashed_password=hash_password("Clinician@123"),
+                role="professional",
+                is_active=True,
+                created_at=datetime.utcnow(),
+            )
+            patient = User(
+                id=str(uuid.uuid4()),
+                username="patient_john",
+                email="john.patient@example.com",
+                hashed_password=hash_password("Patient@123"),
+                role="individual",
+                is_active=True,
+                created_at=datetime.utcnow(),
+            )
+            sess.add_all([clinician, patient])
+            sess.commit()
+
     return engine
