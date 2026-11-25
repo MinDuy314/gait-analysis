@@ -1,0 +1,111 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "subjects": "Subjects",
+    "logout": "Log out",
+    "login": "Log in",
+    "register": "Register"
+  },
+  "auth": {
+    "username": "Username",
+    "email": "Email (optional)",
+    "password": "Password",
+    "role": "Account type",
+    "role_individual": "Individual / Patient",
+    "role_professional": "Clinician / Professional",
+    "loginTitle": "Sign in to Gait Analysis",
+    "registerTitle": "Create your account",
+    "loginButton": "Sign in",
+    "registerButton": "Create account",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "invalidCredentials": "Incorrect username or password.",
+    "usernameConflict": "Username already taken.",
+    "emailConflict": "Email already registered."
+  },
+  "subjects": {
+    "title": "Subjects",
+    "new": "New subject",
+    "name": "Display name",
+    "namePlaceholder": "e.g. Patient A or leave blank",
+    "noSubjects": "No subjects yet. Create your first subject to get started.",
+    "sessions": "Sessions",
+    "created": "Created",
+    "delete": "Delete",
+    "confirmDelete": "Delete this subject and all its data? This cannot be undone."
+  },
+  "sessions": {
+    "title": "Sessions",
+    "new": "New session",
+    "cameraView": "Camera view",
+    "front": "Front",
+    "side": "Side",
+    "walkingSpeed": "Walking speed (m/s)",
+    "walkingSurface": "Walking surface",
+    "height": "Height (m)",
+    "mass": "Mass (kg)",
+    "notes": "Notes",
+    "noSessions": "No sessions yet.",
+    "created": "Created"
+  },
+  "upload": {
+    "title": "Upload Walking Video",
+    "dropzone": "Drop a video file here, or click to browse",
+    "accepted": "Accepted: MP4, MOV, AVI, WEBM",
+    "uploading": "Uploading…",
+    "success": "Upload complete",
+    "error": "Upload failed",
+    "viewConfirm": "Confirm camera view"
+  },
+  "analysis": {
+    "title": "Run Analysis",
+    "submit": "Start analysis",
+    "cameraView": "Camera view",
+    "poseModel": "Pose model",
+    "submitting": "Submitting…",
+    "running": "Analysis running…",
+    "stage": "Stage",
+    "progress": "Progress",
+    "completed": "Analysis complete",
+    "failed": "Analysis failed",
+    "retry": "Retry",
+    "viewResults": "View results"
+  },
+  "results": {
+    "title": "Analysis Results",
+    "annotatedVideo": "Annotated video",
+    "metrics": "Gait metrics",
+    "feature": "Feature",
+    "value": "Value",
+    "unit": "Unit",
+    "status": "Status",
+    "confidence": "Confidence",
+    "interpretation": "Interpretation",
+    "noAnnotation": "Annotated video not yet available.",
+    "overallStatus": "Overall assessment",
+    "supported": "Supported",
+    "limited_evidence": "Limited evidence",
+    "insufficient_data": "Insufficient data",
+    "not_assessable": "Not assessable"
+  },
+  "reports": {
+    "title": "Reports",
+    "generate": "Generate report",
+    "individual": "Patient report",
+    "professional": "Clinical report",
+    "download": "Download",
+    "generating": "Generating…",
+    "generated": "Report ready"
+  },
+  "common": {
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "delete": "Delete",
+    "edit": "Edit",
+    "unknown": "Unknown"
+  }
+}

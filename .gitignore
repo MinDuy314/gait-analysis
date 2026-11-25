@@ -76,3 +76,10 @@ secrets.yaml
 *.sqlite
 *.sqlite3
 outputs/verification/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+!frontend/.env.local.example

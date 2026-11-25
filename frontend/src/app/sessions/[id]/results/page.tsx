@@ -1,0 +1,394 @@
+'use client'
+
+import React, { useEffect, useState, use } from 'react'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { assessmentsApi, recordingsApi, sessionsApi } from '@/lib/api'
+import { useLanguage } from '@/context/LanguageContext'
+import type { Assessment, Session, Recording, FeatureInterpretation } from '@/types/api'
+import {
+  Video,
+  Activity,
+  FileText,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
+  HelpCircle,
+  Download,
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  ShieldAlert,
+  Info,
+  Maximize2
+} from 'lucide-react'
+
+export default function SessionResultsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const resolvedParams = use(params)
+  const sessionId = resolvedParams.id
+  const searchParams = useSearchParams()
+  const recordingId = searchParams.get('recording_id') || ''
+
+  const { t, locale } = useLanguage()
+
+  const [assessment, setAssessment] = useState<Assessment | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
+  const [recordings, setRecordings] = useState<Recording[]>([])
+  const [activeRecordingId, setActiveRecordingId] = useState<string>(recordingId)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Audience view mode: 'patient' vs 'professional'
+  const [viewMode, setViewMode] = useState<'patient' | 'professional'>('patient')
+  const [expandedFeatures, setExpandedFeatures] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    Promise.all([
+      assessmentsApi.get(sessionId).catch(() => null),
+      sessionsApi.get(sessionId).catch(() => null),
+      recordingsApi.list(sessionId).catch(() => ({ items: [] })),
+    ])
+      .then(([ass, sess, recList]) => {
+        if (ass) setAssessment(ass)
+        if (sess) setSession(sess)
+        if (recList?.items) {
+          setRecordings(recList.items)
+          if (!activeRecordingId && recList.items.length > 0) {
+            setActiveRecordingId(recList.items[0].id)
+          }
+        }
+      })
+      .catch((err) => {
+        setError(err.message || 'Failed to load assessment data')
+      })
+      .finally(() => setLoading(false))
+  }, [sessionId, activeRecordingId])
+
+  const toggleExpand = (featureName: string) => {
+    setExpandedFeatures((prev) => ({ ...prev, [featureName]: !prev[featureName] }))
+  }
+
+  const activeRec = recordings.find((r) => r.id === activeRecordingId)
+  const annotatedVideoUrl = activeRecordingId ? recordingsApi.annotatedVideoUrl(activeRecordingId) : ''
+
+  if (loading) {
+    return (
+      <div className="p-16 text-center text-sm text-slate-400">
+        <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <span>{t('common.loading')}</span>
+      </div>
+    )
+  }
+
+  const features: FeatureInterpretation[] = assessment?.data?.feature_interpretations || []
+
+  const statusBadge = (st: string) => {
+    switch (st) {
+      case 'supported':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 className="w-3 h-3" />
+            {t('results.supported')}
+          </span>
+        )
+      case 'limited_evidence':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <AlertCircle className="w-3 h-3" />
+            {t('results.limited_evidence')}
+          </span>
+        )
+      case 'insufficient_data':
+      case 'not_assessable':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+            <HelpCircle className="w-3 h-3" />
+            {st === 'insufficient_data' ? t('results.insufficient_data') : t('results.not_assessable')}
+          </span>
+        )
+    }
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Top Navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <Link
+            href={session ? `/subjects/${session.subject_id}` : '/subjects'}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-teal-700 transition mb-1"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>{locale === 'vi' ? 'Quay lại chi tiết phiên' : 'Back to subject'}</span>
+          </Link>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <Activity className="w-6 h-6 text-teal-600" />
+            <span>{t('results.title')}</span>
+          </h1>
+          <div className="text-xs text-slate-500">
+            {session?.camera_view && (
+              <span className="font-semibold text-teal-800 capitalize mr-2">
+                [{session.camera_view} View]
+              </span>
+            )}
+            <span>ID: {sessionId}</span>
+          </div>
+        </div>
+
+        {/* Audience Mode Switcher */}
+        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl self-start sm:self-auto border border-slate-200">
+          <button
+            onClick={() => setViewMode('patient')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              viewMode === 'patient'
+                ? 'bg-white text-teal-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {locale === 'vi' ? 'Dành cho Bệnh nhân' : 'Patient View'}
+          </button>
+          <button
+            onClick={() => setViewMode('professional')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+              viewMode === 'professional'
+                ? 'bg-white text-teal-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {locale === 'vi' ? 'Chuyên gia / Lâm sàng' : 'Clinician View'}
+          </button>
+        </div>
+      </div>
+
+      {/* Main Grid: Video Player + Key Summary */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Col (7 cols): Large Video Player */}
+        <div className="lg:col-span-7 space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Video className="w-4 h-4 text-teal-600" />
+                <span className="font-bold text-sm text-slate-900">{t('results.annotatedVideo')}</span>
+              </div>
+              <span className="text-[11px] px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 font-semibold border border-teal-200">
+                YOLO COCO 17
+              </span>
+            </div>
+
+            {/* Video Player Container */}
+            <div className="bg-black aspect-video relative flex items-center justify-center">
+              {activeRecordingId ? (
+                <video
+                  controls
+                  playsInline
+                  className="w-full h-full object-contain"
+                  src={annotatedVideoUrl}
+                >
+                  <p className="text-white text-xs p-4">
+                    {t('results.noAnnotation')}
+                  </p>
+                </video>
+              ) : (
+                <div className="p-8 text-center text-slate-400 space-y-2">
+                  <Video className="w-8 h-8 mx-auto" />
+                  <p className="text-xs">{t('results.noAnnotation')}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50/70 border-t border-slate-100 text-xs text-slate-600 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>
+                  {activeRec?.annotation_status === 'completed'
+                    ? locale === 'vi' ? 'Video đã vẽ khung xương hoàn tất' : 'Annotated video ready'
+                    : locale === 'vi' ? 'Đang chờ xử lý video' : 'Video processing...'}
+                </span>
+              </div>
+              <a
+                href={annotatedVideoUrl}
+                download
+                className="text-teal-700 font-semibold hover:underline flex items-center gap-1 text-[11px]"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{locale === 'vi' ? 'Tải video MP4' : 'Download MP4'}</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={`/sessions/${sessionId}/reports`}
+              className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-xl shadow-xs transition"
+            >
+              <FileText className="w-4 h-4" />
+              <span>{locale === 'vi' ? 'Tạo Báo cáo Bệnh nhân / Lâm sàng' : 'Generate Reports'}</span>
+            </Link>
+
+            <Link
+              href={`/progress`}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-teal-500 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition"
+            >
+              <TrendingUp className="w-4 h-4 text-teal-600" />
+              <span>{locale === 'vi' ? 'So sánh với phiên trước' : 'Compare Progress'}</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Right Col (5 cols): Overall Status & Biomechanical Metrics */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Overall Assessment Status Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-3">
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              {t('results.overallStatus')}
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-bold text-slate-900">
+                {assessment?.overall_status === 'supported'
+                  ? locale === 'vi' ? 'Có cơ sở phân tích đầy đủ' : 'Adequately Supported'
+                  : locale === 'vi' ? 'Dữ liệu hạn chế' : 'Limited Evidence'}
+              </div>
+              {statusBadge(assessment?.overall_status || 'supported')}
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {viewMode === 'patient'
+                ? locale === 'vi'
+                  ? 'Video của bạn có chất lượng tốt, trích xuất được tư thế khung xương và các mốc thời gian bước đi rõ ràng.'
+                  : 'Your walking video provided clear pose landmarks and consistent step event detection.'
+                : locale === 'vi'
+                ? 'Mô hình phát hiện chu kỳ bước đi với độ tin cậy thỏa mãn các quy tắc cơ sinh học theo chuẩn tham chiếu.'
+                : 'Pipeline detected gait cycles satisfying biomechanical rule validation against reference boundaries.'}
+            </p>
+          </div>
+
+          {/* Metric Cards List */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center justify-between">
+              <span>{t('results.metrics')}</span>
+              <span className="text-xs font-normal text-slate-400">
+                {features.length} {locale === 'vi' ? 'chỉ số được ghi nhận' : 'features evaluated'}
+              </span>
+            </h3>
+
+            {features.length === 0 ? (
+              <div className="p-6 bg-white rounded-2xl border border-slate-200 text-center text-xs text-slate-500">
+                {locale === 'vi'
+                  ? 'Chưa có chỉ số dáng đi nào được tính toán cho phiên này.'
+                  : 'No gait metrics currently computed for this session.'}
+              </div>
+            ) : (
+              features.map((feat) => {
+                const isExpanded = !!expandedFeatures[feat.feature_name]
+                const hasValue = feat.value !== null && feat.value !== undefined
+
+                return (
+                  <div
+                    key={feat.feature_name}
+                    className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3 transition"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                          {feat.feature_name.replace(/_/g, ' ')}
+                        </div>
+                        <div className="text-xl font-bold text-slate-900 mt-0.5">
+                          {hasValue ? (
+                            <span>
+                              {feat.value?.toFixed(1)}{' '}
+                              <span className="text-xs font-medium text-slate-500">{feat.unit}</span>
+                            </span>
+                          ) : (
+                            <span className="text-sm text-slate-400 italic">
+                              {locale === 'vi' ? 'Không khả dụng' : 'Not available'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {statusBadge(feat.status)}
+                    </div>
+
+                    {/* Interpretation text */}
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {feat.interpretation_text}
+                    </p>
+
+                    {/* Expandable technical details */}
+                    {viewMode === 'professional' && (
+                      <div className="pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(feat.feature_name)}
+                          className="flex items-center justify-between w-full text-[11px] font-semibold text-teal-700 hover:text-teal-800"
+                        >
+                          <span>{locale === 'vi' ? 'Chi tiết cơ sinh học & độ tin cậy' : 'Biomechanical & Uncertainty Details'}</span>
+                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-2.5 p-3 bg-slate-50 rounded-xl space-y-2 text-[11px] text-slate-600">
+                            <div className="flex justify-between">
+                              <span className="font-semibold text-slate-700">Confidence:</span>
+                              <span className="font-mono">{Math.round((feat.confidence || 0) * 100)}%</span>
+                            </div>
+                            {feat.rule_name && (
+                              <div className="flex justify-between">
+                                <span className="font-semibold text-slate-700">Rule:</span>
+                                <span className="font-mono text-slate-500">{feat.rule_name}</span>
+                              </div>
+                            )}
+                            {feat.limitations && feat.limitations.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="font-semibold text-slate-700 block">Limitations:</span>
+                                <ul className="list-disc list-inside text-slate-500">
+                                  {feat.limitations.map((lim, i) => (
+                                    <li key={i}>{lim}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Scientific & Clinical Disclaimer Box */}
+      <div className="p-5 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-xs text-amber-900 space-y-2">
+        <div className="flex items-center gap-2 font-bold text-amber-800">
+          <ShieldAlert className="w-4 h-4 text-amber-600" />
+          <span>{locale === 'vi' ? 'Tuyên bố trách nhiệm khoa học & y tế:' : 'Scientific & Medical Disclaimer:'}</span>
+        </div>
+        <ul className="list-disc list-inside text-amber-800 space-y-1 leading-relaxed text-[11px]">
+          <li>
+            {locale === 'vi'
+              ? 'Các chỉ số được trích xuất từ camera đơn kính (monocular 2D) có giới hạn phép chiếu hình học và sai số ước tính.'
+              : 'Estimates derived from monocular 2D video are subject to projection limitations and pose noise.'}
+          </li>
+          <li>
+            {locale === 'vi'
+              ? 'Hệ thống không thay thế hệ thống đo đạc động lực học 3D có hiệu chuẩn chuyên dụng (3D Motion Capture).'
+              : 'Monocular estimation is not an equivalent replacement for laboratory-calibrated 3D motion capture systems.'}
+          </li>
+          <li>
+            {locale === 'vi'
+              ? 'Kết quả mang tính chất hỗ trợ định lượng theo dõi tiến trình, không được dùng làm căn cứ chẩn đoán bệnh lý duy nhất.'
+              : 'Results are quantitative observational aids and do not constitute a definitive medical diagnosis.'}
+          </li>
+        </ul>
+      </div>
+    </div>
+  )
+}

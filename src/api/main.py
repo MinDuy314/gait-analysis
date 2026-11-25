@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from src.database.database import init_db
 from src.api.routes import subjects, sessions, uploads, analysis, jobs, assessments, reports, progress
+from src.api.auth import routes as auth_routes
 from src.api.error_handlers import validation_exception_handler, generic_exception_handler, gait_exception_handler
 from src.api.middleware import RequestTimingMiddleware
 from src.core.exceptions import GaitAnalysisError
@@ -51,6 +52,7 @@ app.include_router(jobs.router)
 app.include_router(assessments.router)
 app.include_router(reports.router)
 app.include_router(progress.router)
+app.include_router(auth_routes.router)
 
 
 @app.get("/health")

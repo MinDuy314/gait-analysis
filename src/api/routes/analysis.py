@@ -48,5 +48,4 @@ def submit_analysis(
         pose_model=payload.pose_model,
         recording_id=payload.recording_id,
     )
-    db.refresh(job)
     return job

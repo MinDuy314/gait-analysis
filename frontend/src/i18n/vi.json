@@ -1,0 +1,111 @@
+{
+  "nav": {
+    "dashboard": "Bảng điều khiển",
+    "subjects": "Đối tượng",
+    "logout": "Đăng xuất",
+    "login": "Đăng nhập",
+    "register": "Đăng ký"
+  },
+  "auth": {
+    "username": "Tên đăng nhập",
+    "email": "Email (tùy chọn)",
+    "password": "Mật khẩu",
+    "role": "Loại tài khoản",
+    "role_individual": "Cá nhân / Bệnh nhân",
+    "role_professional": "Bác sĩ / Chuyên gia",
+    "loginTitle": "Đăng nhập hệ thống Phân tích dáng đi",
+    "registerTitle": "Tạo tài khoản mới",
+    "loginButton": "Đăng nhập",
+    "registerButton": "Tạo tài khoản",
+    "noAccount": "Chưa có tài khoản?",
+    "hasAccount": "Đã có tài khoản?",
+    "invalidCredentials": "Tên đăng nhập hoặc mật khẩu không đúng.",
+    "usernameConflict": "Tên đăng nhập đã được sử dụng.",
+    "emailConflict": "Email đã được đăng ký."
+  },
+  "subjects": {
+    "title": "Đối tượng",
+    "new": "Thêm đối tượng",
+    "name": "Tên hiển thị",
+    "namePlaceholder": "VD: Bệnh nhân A hoặc để trống",
+    "noSubjects": "Chưa có đối tượng. Tạo đối tượng đầu tiên để bắt đầu.",
+    "sessions": "Phiên",
+    "created": "Ngày tạo",
+    "delete": "Xóa",
+    "confirmDelete": "Xóa đối tượng này và toàn bộ dữ liệu? Không thể hoàn tác."
+  },
+  "sessions": {
+    "title": "Phiên",
+    "new": "Phiên mới",
+    "cameraView": "Góc camera",
+    "front": "Phía trước",
+    "side": "Phía bên",
+    "walkingSpeed": "Tốc độ đi bộ (m/s)",
+    "walkingSurface": "Bề mặt đi bộ",
+    "height": "Chiều cao (m)",
+    "mass": "Cân nặng (kg)",
+    "notes": "Ghi chú",
+    "noSessions": "Chưa có phiên nào.",
+    "created": "Ngày tạo"
+  },
+  "upload": {
+    "title": "Tải lên video đi bộ",
+    "dropzone": "Kéo thả video vào đây, hoặc nhấn để chọn tệp",
+    "accepted": "Chấp nhận: MP4, MOV, AVI, WEBM",
+    "uploading": "Đang tải lên…",
+    "success": "Tải lên thành công",
+    "error": "Tải lên thất bại",
+    "viewConfirm": "Xác nhận góc camera"
+  },
+  "analysis": {
+    "title": "Chạy phân tích",
+    "submit": "Bắt đầu phân tích",
+    "cameraView": "Góc camera",
+    "poseModel": "Mô hình tư thế",
+    "submitting": "Đang gửi…",
+    "running": "Đang phân tích…",
+    "stage": "Giai đoạn",
+    "progress": "Tiến độ",
+    "completed": "Phân tích hoàn tất",
+    "failed": "Phân tích thất bại",
+    "retry": "Thử lại",
+    "viewResults": "Xem kết quả"
+  },
+  "results": {
+    "title": "Kết quả phân tích",
+    "annotatedVideo": "Video có chú thích",
+    "metrics": "Các chỉ số dáng đi",
+    "feature": "Chỉ số",
+    "value": "Giá trị",
+    "unit": "Đơn vị",
+    "status": "Trạng thái",
+    "confidence": "Độ tin cậy",
+    "interpretation": "Diễn giải",
+    "noAnnotation": "Video chú thích chưa sẵn sàng.",
+    "overallStatus": "Đánh giá tổng thể",
+    "supported": "Có cơ sở",
+    "limited_evidence": "Bằng chứng hạn chế",
+    "insufficient_data": "Không đủ dữ liệu",
+    "not_assessable": "Không thể đánh giá"
+  },
+  "reports": {
+    "title": "Báo cáo",
+    "generate": "Tạo báo cáo",
+    "individual": "Báo cáo bệnh nhân",
+    "professional": "Báo cáo lâm sàng",
+    "download": "Tải xuống",
+    "generating": "Đang tạo…",
+    "generated": "Báo cáo đã sẵn sàng"
+  },
+  "common": {
+    "back": "Quay lại",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "loading": "Đang tải…",
+    "error": "Đã xảy ra lỗi",
+    "retry": "Thử lại",
+    "delete": "Xóa",
+    "edit": "Chỉnh sửa",
+    "unknown": "Không rõ"
+  }
+}
