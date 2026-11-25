@@ -1,0 +1,2 @@
+event_type,side,tolerance_ms,total_reference_events,total_detected_events,true_positives,false_positives,false_negatives,precision,recall,f1_score,timing_mae_ms,timing_median_error_ms,timing_rmse_ms,timing_error_sd_ms,status
+foot_strike,,100.0,0,0,0,0,0,,,,,,,,not_testable_no_paired_video

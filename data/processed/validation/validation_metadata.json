@@ -1,0 +1,19 @@
+{
+  "milestone": "Milestone 4: Biomechanical Validation",
+  "has_real_paired_videos": false,
+  "n_raw_videos_found": 0,
+  "status_by_candidate": {
+    "knee_flexion_extension_rom": "conditionally_comparable (requires paired side-view recording)",
+    "hip_flexion_extension_rom": "conditionally_comparable (requires paired side-view recording)",
+    "ankle_angle_planar": "conditionally_comparable (requires rigid foot definition)",
+    "cadence_vs_gait_speed": "not_comparable (unit/concept mismatch: steps/min vs m/s)",
+    "trunk_displacement_px": "not_comparable (unit mismatch: pixels vs 3D angular degrees)",
+    "gait_events": "not_testable (no paired video in current dataset)"
+  },
+  "participant_splits_file": "metadata/participant_splits.csv",
+  "scientific_constraints": [
+    "Never assume 2D monocular pose angles equal 3D Plug-in Gait Cardan angles.",
+    "Correlation must never be cited as proof of agreement; Bland-Altman LoA and bias required.",
+    "Synthetic validation tests demonstrate algorithmic correctness only, not real-world clinical validity."
+  ]
+}

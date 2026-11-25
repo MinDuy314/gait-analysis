@@ -1,0 +1,144 @@
+# Feature extraction and reference distribution configuration
+features:
+  angles:
+    - ankleAx
+    - ankleAy
+    - ankleAz
+    - ankleAx_contra
+    - ankleAy_contra
+    - ankleAz_contra
+    - kneeAx
+    - kneeAy
+    - kneeAz
+    - kneeAx_contra
+    - kneeAy_contra
+    - kneeAz_contra
+    - hipAx
+    - hipAy
+    - hipAz
+    - hipAx_contra
+    - hipAy_contra
+    - hipAz_contra
+    - shoulderAx
+    - shoulderAy
+    - shoulderAz
+    - shoulderAx_contra
+    - shoulderAy_contra
+    - shoulderAz_contra
+    - elbowAx
+    - elbowAy
+    - elbowAz
+    - elbowAx_contra
+    - elbowAy_contra
+    - elbowAz_contra
+    - headAx
+    - headAy
+    - headAz
+    - thoraxAx
+    - thoraxAy
+    - thoraxAz
+  moments:
+    - ankleMx
+    - ankleMy
+    - ankleMz
+    - kneeMx
+    - kneeMy
+    - kneeMz
+    - hipMx
+    - hipMy
+    - hipMz
+  powers:
+    - anklePx
+    - anklePy
+    - anklePz
+    - kneePx
+    - kneePy
+    - kneePz
+    - hipPx
+    - hipPy
+    - hipPz
+
+  gait_phases:
+    points_pct: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    intervals_pct:
+      loading_response: [0, 12]
+      mid_stance: [12, 31]
+      terminal_stance: [31, 50]
+      pre_swing: [50, 62]
+      swing: [62, 100]
+
+  missing_data:
+    min_valid_completeness_pct: 80.0
+    min_valid_samples: 81
+    allow_interpolation: false
+
+  bilateral_pairs:
+    - primary: ankleAx
+      contralateral: ankleAx_contra
+      joint: ankle
+      axis: X
+    - primary: ankleAy
+      contralateral: ankleAy_contra
+      joint: ankle
+      axis: Y
+    - primary: ankleAz
+      contralateral: ankleAz_contra
+      joint: ankle
+      axis: Z
+    - primary: kneeAx
+      contralateral: kneeAx_contra
+      joint: knee
+      axis: X
+    - primary: kneeAy
+      contralateral: kneeAy_contra
+      joint: knee
+      axis: Y
+    - primary: kneeAz
+      contralateral: kneeAz_contra
+      joint: knee
+      axis: Z
+    - primary: hipAx
+      contralateral: hipAx_contra
+      joint: hip
+      axis: X
+    - primary: hipAy
+      contralateral: hipAy_contra
+      joint: hip
+      axis: Y
+    - primary: hipAz
+      contralateral: hipAz_contra
+      joint: hip
+      axis: Z
+    - primary: shoulderAx
+      contralateral: shoulderAx_contra
+      joint: shoulder
+      axis: X
+    - primary: shoulderAy
+      contralateral: shoulderAy_contra
+      joint: shoulder
+      axis: Y
+    - primary: shoulderAz
+      contralateral: shoulderAz_contra
+      joint: shoulder
+      axis: Z
+    - primary: elbowAx
+      contralateral: elbowAx_contra
+      joint: elbow
+      axis: X
+    - primary: elbowAy
+      contralateral: elbowAy_contra
+      joint: elbow
+      axis: Y
+    - primary: elbowAz
+      contralateral: elbowAz_contra
+      joint: elbow
+      axis: Z
+
+  asymmetry:
+    near_zero_threshold: 0.001
+
+reference:
+  percentiles: [5, 25, 50, 75, 95]
+  min_trials_for_stats: 5
+  min_participants_for_stats: 3
+  min_participants_for_percentiles: 5

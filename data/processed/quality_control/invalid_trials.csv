@@ -1,0 +1,2 @@
+trial_id,participant_id,condition,filename,validation_status,load_error,missing_variables,unexpected_variables,shape_inconsistencies,dtype_inconsistencies,has_kinematic_anomalies
+ramp75_up__Ref07_ramp75_shoes40,Ref07,ramp75_up,Ref07_ramp75_shoes40.npz,valid_with_numeric_anomalies,,,,,,True

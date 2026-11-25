@@ -1,0 +1,12 @@
+participant_id,split,trial_count,random_seed,dataset_version,train_proportion_target,val_proportion_target,test_proportion_target,condition_distribution
+Ref01,train,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref02,test,58,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:10
+Ref05,train,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref06,train,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref07,val,60,42,29300888.v1,0.64,0.18,0.18,level_down:5;level_up:7;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref08,train,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref09,train,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref10,train,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref11,test,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref12,val,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12
+Ref13,train,60,42,29300888.v1,0.64,0.18,0.18,level_down:6;level_up:6;ramp75_down:12;ramp75_up:12;ramp_10_down:12;ramp_10_up:12

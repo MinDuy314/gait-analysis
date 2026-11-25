@@ -1,0 +1,1 @@
+feature_name,camera_view,condition,units,n_observations,n_participants,mean_bias,mae,rmse,pearson_r,pearson_p_value,spearman_rho,spearman_p_value,bland_altman_lower_loa,bland_altman_upper_loa,bland_altman_sd,bootstrap_mae_ci_lower,bootstrap_mae_ci_upper,interpretation_note

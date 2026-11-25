@@ -1,0 +1,44 @@
+{
+  "dataset_name": "Gait Analysis Dataset (29300888)",
+  "dataset_version": "29300888.v1",
+  "participants_included": [
+    "Ref01",
+    "Ref02",
+    "Ref05",
+    "Ref06",
+    "Ref07",
+    "Ref08",
+    "Ref09",
+    "Ref10",
+    "Ref11",
+    "Ref12",
+    "Ref13"
+  ],
+  "n_participants": 11,
+  "n_trials_processed": 658,
+  "conditions": [
+    "level_down",
+    "level_up",
+    "ramp75_down",
+    "ramp75_up",
+    "ramp_10_down",
+    "ramp_10_up"
+  ],
+  "thresholds": {
+    "min_trials_for_stats": 5,
+    "min_participants_for_stats": 3,
+    "min_participants_for_percentiles": 5,
+    "percentiles": [
+      5,
+      25,
+      50,
+      75,
+      95
+    ]
+  },
+  "limitations": [
+    "Dataset contains 11 participants with NPZ data (Ref03 and Ref04 unavailable in NPZ).",
+    "Distributions reflect this specific research cohort and must NOT be presented as universal clinical norms.",
+    "Conditions are kept strictly separate and must not be pooled."
+  ]
+}

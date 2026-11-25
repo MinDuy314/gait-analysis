@@ -1,0 +1,2 @@
+observation_id,reason,category
+video_raw_empty,No matched optical video recordings available in data/video/raw/ corresponding to NPZ trials.,not_testable

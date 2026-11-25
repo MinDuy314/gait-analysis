@@ -1,0 +1,40 @@
+# Dataset configuration
+dataset:
+  name: 'Gait Analysis Dataset (29300888)'
+  version: '29300888.v1'
+  raw_dir: 'data/raw'
+  processed_dir: 'data/processed'
+  sampling_rate_mocap_hz: 200
+  sampling_rate_force_hz: 1000
+  gait_cycle_points: 101
+  conditions:
+    level_up:
+      canonical_name: 'level_up'
+      description: 'Level ground walking (forward/up direction)'
+      slope_deg: 0.0
+    level_down:
+      canonical_name: 'level_down'
+      description: 'Level ground walking (return/down direction)'
+      slope_deg: 0.0
+    ramp75_up:
+      canonical_name: 'ramp_75_up'
+      description: '7.5 degree ramp ascent'
+      slope_deg: 7.5
+    ramp75_down:
+      canonical_name: 'ramp_75_down'
+      description: '7.5 degree ramp descent'
+      slope_deg: -7.5
+    ramp_10_up:
+      canonical_name: 'ramp_10_up'
+      description: '10.0 degree ramp ascent'
+      slope_deg: 10.0
+    ramp_10_down:
+      canonical_name: 'ramp_10_down'
+      description: '10.0 degree ramp descent'
+      slope_deg: -10.0
+  splits:
+    random_seed: 42
+    proportions:
+      train: 0.64
+      val: 0.18
+      test: 0.18

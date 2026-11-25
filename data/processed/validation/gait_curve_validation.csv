@@ -1,0 +1,1 @@
+feature_name,reference_var,condition,camera_view,n_paired_cycles,mean_curve_mae,mean_curve_rmse,mean_curve_bias,peak_magnitude_diff_mean,peak_timing_diff_mean_pct,pointwise_mae_curve,pointwise_bias_curve

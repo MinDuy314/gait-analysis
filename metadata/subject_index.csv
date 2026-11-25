@@ -1,0 +1,14 @@
+participant_id,npz_available,total_trials,valid_or_usable_trials,invalid_trials,conditions_count,conditions,mean_gait_speed_mps,min_gait_speed_mps,max_gait_speed_mps,notes
+Ref01,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.2511,1.0705,1.4395,Complete NPZ participant dataset
+Ref02,True,58,58,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.1509,1.0545,1.3205,Complete NPZ participant dataset
+Ref03,False,0,0,0,0,,,,,No NPZ files present; check data/raw/c3d/incomplete data or data/raw/txt/incomplete data
+Ref04,False,0,0,0,0,,,,,No NPZ files present; check data/raw/c3d/incomplete data or data/raw/txt/incomplete data
+Ref05,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.2107,1.0506,1.3617,Complete NPZ participant dataset
+Ref06,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.2742,1.0322,1.4953,Complete NPZ participant dataset
+Ref07,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.2345,1.0455,1.4474,Complete NPZ participant dataset
+Ref08,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.3223,1.1645,1.4498,Complete NPZ participant dataset
+Ref09,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.1465,1.0819,1.2641,Complete NPZ participant dataset
+Ref10,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.2819,1.1845,1.4337,Complete NPZ participant dataset
+Ref11,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.1562,1.0575,1.3131,Complete NPZ participant dataset
+Ref12,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.362,1.0113,1.5773,Complete NPZ participant dataset
+Ref13,True,60,60,0,6,level_down;level_up;ramp75_down;ramp75_up;ramp_10_down;ramp_10_up,1.2904,1.1386,1.4741,Complete NPZ participant dataset

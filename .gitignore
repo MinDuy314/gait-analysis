@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large binary / raw data (keep metadata and processed CSVs, skip heavy files)
+data/raw/npz/
+data/raw/c3d/
+data/raw/txt/
+data/video/
+
+# Processed large binaries — keep CSVs/parquet, skip heavy npz outputs
+data/processed/**/*.npz
+data/processed/**/*.npy
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.weights
+
+# Outputs — keep structure, skip generated plots and large reports
+outputs/figures/
+outputs/reports/*.pdf
+outputs/reports/*.html
+
+# Log files
+*.log
+logs/
+
+# Secrets / env
+.env
+.env.*
+secrets.yaml
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
