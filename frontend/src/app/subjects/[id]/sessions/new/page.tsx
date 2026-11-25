@@ -138,9 +138,14 @@ export default function NewSessionPage({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 block">
-                  {t('sessions.walkingSpeed')}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700 block">
+                    {t('sessions.walkingSpeed')}
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    ({locale === 'vi' ? 'Tùy chọn' : 'Optional'})
+                  </span>
+                </div>
                 <input
                   type="number"
                   step="0.01"
@@ -148,15 +153,20 @@ export default function NewSessionPage({
                   max="5.0"
                   value={walkingSpeed}
                   onChange={(e) => setWalkingSpeed(e.target.value)}
-                  placeholder="e.g. 1.25"
+                  placeholder={locale === 'vi' ? 'Không bắt buộc (VD: 1.25)' : 'Optional (e.g. 1.25)'}
                   className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 block">
-                  {t('sessions.walkingSurface')}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700 block">
+                    {t('sessions.walkingSurface')}
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    ({locale === 'vi' ? 'Tùy chọn' : 'Optional'})
+                  </span>
+                </div>
                 <select
                   value={walkingSurface}
                   onChange={(e) => setWalkingSurface(e.target.value)}
