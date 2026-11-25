@@ -1,0 +1,21 @@
+{
+  "report_id": "b2275234-3172-420f-b971-083f338a01fc",
+  "report_type": "professional",
+  "subject_id": "c2e7a689-f3d8-45f4-937f-107e18ab8961",
+  "session_id": "16b327f7-9906-4c6c-a523-e4dbdaf12193",
+  "assessment_id": "0d28163b-4e6a-4bce-949f-51ee61fe93a5",
+  "status": "generated",
+  "generated_at": "2026-11-25T19:04:07.291016",
+  "limitations": [
+    "Video-derived estimates only. Not equivalent to laboratory motion capture.",
+    "Research dataset reference distributions. Not validated clinical norms.",
+    "Anatomical side mapping (left/right) not verified.",
+    "Camera not calibrated — metric measurements (e.g. speed, stride length) are estimates."
+  ],
+  "provenance": {
+    "pose_model": "yolo",
+    "pose_model_version": "v8n-pose",
+    "assessment_rule_version": "1.0.0",
+    "feature_extraction_version": "1.0.0"
+  }
+}
