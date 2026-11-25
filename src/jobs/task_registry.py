@@ -1,8 +1,9 @@
 """Task registry and end-to-end analysis orchestration."""
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
 from src.core.logging import get_logger
-from src.database.repositories import JobRepository
+from src.database.repositories import JobRepository, RecordingRepository
 from src.database.models import AssessmentRecord
 
 logger = get_logger(__name__)
@@ -36,6 +37,7 @@ def run_analysis_pipeline(
     camera_view: str = "side",
     pose_model: str = "yolo",
     pose_model_version: str = "v8n-pose",
+    recording_id: Optional[str] = None,
     **kwargs,
 ):
     """Full pipeline task. Saves partial results on each stage completion."""
@@ -46,6 +48,8 @@ def run_analysis_pipeline(
         "confidences": {},
         "assessment": None,
         "reports": [],
+        "annotation_status": "not_applicable",
+        "annotated_video_path": None,
     }
 
     def _update(stage: str, pct: Optional[float] = None):
@@ -130,6 +134,17 @@ def run_analysis_pipeline(
         partial_results["reports"] = [str(ind_path), str(pro_path)]
         partial_results["stages_completed"].append("generate_reports")
 
+        # ------------------------------------------------------------------ #
+        # Optional annotation stage — failure does NOT fail the whole job.    #
+        # ------------------------------------------------------------------ #
+        if recording_path and recording_id:
+            _annotate_recording(
+                db=db,
+                recording_path=recording_path,
+                recording_id=recording_id,
+                partial_results=partial_results,
+            )
+
         # Stage 11: Finalize
         _update("finalize", pct=100.0)
         partial_results["stages_completed"].append("finalize")
@@ -142,3 +157,60 @@ def run_analysis_pipeline(
         db.rollback()
         repo.update_status(job_id, "partially_completed", error=str(exc), result=partial_results)
         raise
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+def _annotate_recording(
+    db,
+    recording_path: str,
+    recording_id: str,
+    partial_results: Dict[str, Any],
+) -> None:
+    """Run annotation as an optional pipeline stage.
+
+    Populates partial_results["annotation_status"] and
+    partial_results["annotated_video_path"].  Persists to DB via
+    RecordingRepository.  Any failure is caught, logged, and recorded
+    as annotation_status="failed" — the job itself still completes.
+    """
+    from src.visualization.video_annotator import annotate_video
+    from src.core.exceptions import VideoAnnotationError
+    from src.database.repositories import RecordingRepository
+
+    rec_repo = RecordingRepository(db)
+
+    try:
+        src_path = Path(recording_path)
+        out_path = src_path.parent / f"annotated_{src_path.name}"
+
+        # Annotation with empty pose list → blank frames (safe fallback)
+        poses = partial_results.get("_poses", [])  # populated if real pipeline ran
+
+        annotated_path = annotate_video(
+            video_path=src_path,
+            poses=poses,
+            output_path=out_path,
+        )
+
+        partial_results["annotation_status"] = "completed"
+        partial_results["annotated_video_path"] = str(annotated_path)
+
+        rec_repo.update_annotation(
+            recording_id=recording_id,
+            annotated_video_path=str(annotated_path),
+            annotation_status="completed",
+        )
+        logger.info("Annotation completed for recording %s → %s", recording_id, annotated_path)
+
+    except (VideoAnnotationError, Exception) as ann_err:
+        logger.warning("Annotation failed for recording %s: %s", recording_id, ann_err)
+        partial_results["annotation_status"] = "failed"
+        partial_results["annotation_error"] = str(ann_err)
+        rec_repo.update_annotation(
+            recording_id=recording_id,
+            annotated_video_path=None,
+            annotation_status="failed",
+        )

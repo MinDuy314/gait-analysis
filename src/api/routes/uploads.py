@@ -1,12 +1,14 @@
 import tempfile
 from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from src.api.dependencies import get_db, get_storage
 from src.api.schemas.api_responses import RecordingResponse
 from src.database.repositories import RecordingRepository, SessionRepository
 from src.storage.file_storage import ALLOWED_EXTENSIONS
 from src.core.logging import get_logger
+from src.core.config import AppConfig
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["recordings"])
@@ -73,3 +75,58 @@ def get_recording(recording_id: str, db: Session = Depends(get_db)):
     if not r:
         raise HTTPException(status_code=404, detail="Recording not found")
     return r
+
+
+@router.get(
+    "/api/v1/recordings/{recording_id}/annotated-video",
+    summary="Stream annotated video (MP4)",
+)
+def get_annotated_video(recording_id: str, db: Session = Depends(get_db)):
+    """Stream the annotated MP4 for a completed recording.
+
+    - 404: recording not found, or file missing despite completed status.
+    - 409: annotation not yet completed (pending / failed / not_applicable).
+    """
+    from fastapi.responses import FileResponse as _FR
+    from src.core.config import AppConfig
+
+    r = RecordingRepository(db).get(recording_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    if r.annotation_status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Annotated video not ready. Current annotation_status: "
+                f"{r.annotation_status or 'pending'}"
+            ),
+        )
+
+    if not r.annotated_video_path:
+        raise HTTPException(status_code=404, detail="Annotated video path not recorded")
+
+    # Path traversal protection
+    ann_path = Path(r.annotated_video_path).resolve()
+    cfg = AppConfig()
+    storage_root = (cfg.project_root / "data").resolve()
+    try:
+        ann_path.relative_to(storage_root)
+    except ValueError:
+        logger.warning(
+            "Annotated video path %s is outside storage root %s",
+            ann_path, storage_root,
+        )
+        raise HTTPException(status_code=403, detail="Annotated video path is not accessible")
+
+    if not ann_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Annotated video file not found on disk",
+        )
+
+    return _FR(
+        path=str(ann_path),
+        media_type="video/mp4",
+        filename=ann_path.name,
+    )

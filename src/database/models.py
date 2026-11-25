@@ -71,6 +71,8 @@ class Recording(Base):
     height = Column(Integer, nullable=True)
     validation_status = Column(String, default="pending")
     validation_message = Column(Text, nullable=True)
+    annotated_video_path = Column(String, nullable=True)
+    annotation_status = Column(String, nullable=True, default="pending")
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     session = relationship("Session", back_populates="recordings")

@@ -76,6 +76,21 @@ class RecordingRepository:
     def list_for_session(self, session_id: str) -> List[Recording]:
         return self.db.query(Recording).filter(Recording.session_id == session_id, Recording.is_deleted == False).all()
 
+    def update_annotation(
+        self,
+        recording_id: str,
+        annotated_video_path: Optional[str],
+        annotation_status: str,
+    ) -> bool:
+        """Persist annotation result. Returns True if the recording was found."""
+        r = self.get(recording_id)
+        if not r:
+            return False
+        r.annotated_video_path = annotated_video_path
+        r.annotation_status = annotation_status
+        self.db.commit()
+        return True
+
 
 class JobRepository:
     def __init__(self, db: DBSession):

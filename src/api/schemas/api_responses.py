@@ -37,6 +37,8 @@ class RecordingResponse(BaseModel):
     server_filename: str
     file_size_bytes: Optional[int] = None
     validation_status: str
+    annotated_video_path: Optional[str] = None
+    annotation_status: Optional[str] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
