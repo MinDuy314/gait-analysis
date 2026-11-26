@@ -167,6 +167,9 @@ class JobRepository:
             j.total_frames = total_frames
         if error:
             j.error_message = error
+        elif status == "queued":
+            j.error_message = None
+            j.completed_at = None
         if result is not None:
             j.result_data = result
         if status == "running" and not j.started_at:

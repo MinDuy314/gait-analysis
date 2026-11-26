@@ -38,7 +38,9 @@ export const sessionsApi = {
 // ─── Recordings ───────────────────────────────────────────────────────────
 export const recordingsApi = {
   list: (session_id: string) =>
-    api.get<Paginated<Recording>>(`/api/v1/sessions/${session_id}/recordings`).then(r => r.data),
+    api.get<Recording[] | Paginated<Recording>>(`/api/v1/sessions/${session_id}/recordings`).then((r) =>
+      Array.isArray(r.data) ? r.data : (r.data?.items || [])
+    ),
   get: (id: string) => api.get<Recording>(`/api/v1/recordings/${id}`).then(r => r.data),
   upload: (session_id: string, file: File, onProgress?: (pct: number) => void) => {
     const form = new FormData()

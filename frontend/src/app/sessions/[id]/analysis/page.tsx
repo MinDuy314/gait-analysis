@@ -42,36 +42,42 @@ export default function AnalysisProgressPage({
     if (!jobId) return
 
     let isMounted = true
-    const interval = setInterval(async () => {
+    let intervalId: ReturnType<typeof setInterval> | null = null
+
+    const poll = async () => {
       try {
         const j = await jobsApi.get(jobId)
         if (!isMounted) return
         setJob(j)
 
         if (j.status === 'completed') {
-          clearInterval(interval)
-          // Finished successfully -> navigate to results
+          if (intervalId) clearInterval(intervalId)
+          const targetRec = j.recording_id || recordingId
           setTimeout(() => {
-            router.push(`/sessions/${sessionId}/results?recording_id=${recordingId}`)
+            router.push(`/sessions/${sessionId}/results?recording_id=${targetRec}`)
           }, 1000)
         } else if (j.status === 'failed' || j.status === 'cancelled') {
-          clearInterval(interval)
+          if (intervalId) clearInterval(intervalId)
         }
       } catch (err: any) {
         if (!isMounted) return
         setError(err.response?.data?.detail || 'Failed to poll job status')
       }
-    }, 1500)
+    }
+
+    poll()
+    intervalId = setInterval(poll, 1500)
 
     return () => {
       isMounted = false
-      clearInterval(interval)
+      if (intervalId) clearInterval(intervalId)
     }
   }, [jobId, sessionId, recordingId, router])
 
   const handleRetry = async () => {
     if (!jobId) return
     setIsRetrying(true)
+    setError(null)
     try {
       const newJob = await jobsApi.retry(jobId)
       setJob(newJob)
@@ -82,17 +88,76 @@ export default function AnalysisProgressPage({
     }
   }
 
-  const stages = [
-    { id: 'validation', label: locale === 'vi' ? 'Kiểm tra tệp video' : 'Video Validation' },
-    { id: 'pose_estimation', label: locale === 'vi' ? 'Trích xuất tư thế YOLO' : 'YOLO Pose Estimation' },
-    { id: 'gait_events', label: locale === 'vi' ? 'Phát hiện sự kiện tiếp đất / nhấc gót' : 'Gait Event Detection' },
-    { id: 'feature_extraction', label: locale === 'vi' ? 'Tính toán cơ sinh học' : 'Biomechanical Extraction' },
-    { id: 'annotation', label: locale === 'vi' ? 'Vẽ khung xương & Xuất MP4' : 'Skeleton Annotation & MP4' },
+  const stageOrder = [
+    'validate_recording',
+    'extract_frames',
+    'estimate_pose',
+    'detect_view',
+    'detect_events',
+    'segment_cycles',
+    'extract_features',
+    'quality_control',
+    'assess',
+    'generate_reports',
+    'annotate_recording',
+    'finalize',
   ]
 
-  const isFailed = job?.status === 'failed'
+  const getStageLabel = (stage?: string): string => {
+    if (!stage) return locale === 'vi' ? 'Đang khởi chạy...' : 'Initializing pipeline...'
+    switch (stage) {
+      case 'validate_recording':
+        return locale === 'vi' ? 'Kiểm tra tệp video' : 'Validating video'
+      case 'extract_frames':
+        return locale === 'vi' ? 'Trích xuất khung hình' : 'Extracting frames'
+      case 'estimate_pose':
+        return locale === 'vi' ? 'Phân tích tư thế YOLO (theo khung hình)' : 'YOLO Pose Frame Processing'
+      case 'detect_view':
+      case 'detect_events':
+      case 'segment_cycles':
+      case 'extract_features':
+      case 'quality_control':
+        return locale === 'vi' ? 'Phân tích chu kỳ & cơ sinh học' : 'Gait Cycle & Biomechanical Analysis'
+      case 'assess':
+      case 'generate_reports':
+        return locale === 'vi' ? 'Đánh giá & tạo báo cáo' : 'Assessment & Report Generation'
+      case 'annotate_recording':
+        return locale === 'vi' ? 'Vẽ khung xương & xuất video MP4' : 'Rendering Annotated MP4 Video'
+      case 'finalize':
+        return locale === 'vi' ? 'Hoàn tất & lưu kết quả' : 'Finalizing & Saving Results'
+      case 'queued_retry':
+        return locale === 'vi' ? 'Đang xếp hàng chạy lại...' : 'Queued for retry...'
+      default:
+        return stage.replace(/_/g, ' ')
+    }
+  }
+
+  const stages = [
+    { id: 'validate', match: ['validate_recording'], label: locale === 'vi' ? 'Kiểm tra tệp video' : 'Video Validation' },
+    { id: 'pose', match: ['extract_frames', 'estimate_pose'], label: locale === 'vi' ? 'Trích xuất tư thế YOLO' : 'YOLO Pose Estimation' },
+    { id: 'biomech', match: ['detect_view', 'detect_events', 'segment_cycles', 'extract_features', 'quality_control', 'assess', 'generate_reports'], label: locale === 'vi' ? 'Phân tích chu kỳ & cơ sinh học' : 'Gait Events & Biomechanics' },
+    { id: 'annotate', match: ['annotate_recording'], label: locale === 'vi' ? 'Vẽ khung xương & Xuất MP4' : 'Skeleton Annotation & MP4' },
+    { id: 'finalize', match: ['finalize'], label: locale === 'vi' ? 'Hoàn tất & Lưu kết quả' : 'Finalizing Results' },
+  ]
+
+  const isFailed = job?.status === 'failed' || job?.status === 'cancelled'
   const isCompleted = job?.status === 'completed'
-  const progressPct = job?.progress_pct ? Math.round(job.progress_pct * 100) : 10
+
+  // Backend progress_pct is 0..100. Clamp running progress to <= 99% so 100% appears ONLY on completed.
+  const overallPct = isCompleted
+    ? 100
+    : Math.min(99, Math.max(0, Math.round(job?.progress_pct ?? 0)))
+
+  const hasFrameCounts = !!(job?.total_frames && job.total_frames > 0)
+  const safeProcessedFrames = hasFrameCounts
+    ? Math.min(job?.processed_frames || 0, job!.total_frames!)
+    : 0
+  const framePct = hasFrameCounts
+    ? Math.min(100, Math.max(0, Math.round((safeProcessedFrames / job!.total_frames!) * 100)))
+    : 0
+
+  const currentStageIdx = job?.current_stage ? stageOrder.indexOf(job.current_stage) : -1
+  const targetRecordingId = job?.recording_id || recordingId
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -107,8 +172,10 @@ export default function AnalysisProgressPage({
             </span>
           </div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Activity className="w-5 h-5 text-teal-600 animate-pulse" />
-            <span>{isCompleted ? t('analysis.completed') : t('analysis.running')}</span>
+            <Activity className={`w-5 h-5 ${isFailed ? 'text-red-500' : isCompleted ? 'text-emerald-600' : 'text-teal-600 animate-pulse'}`} />
+            <span>
+              {isFailed ? t('analysis.failed') : isCompleted ? t('analysis.completed') : t('analysis.running')}
+            </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             {locale === 'vi'
@@ -117,29 +184,47 @@ export default function AnalysisProgressPage({
           </p>
         </div>
 
-        {/* Progress bar */}
+        {/* Overall Job Progress Bar */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-700 font-semibold">
             <span>
-              {job?.current_stage
-                ? `${t('analysis.stage')}: ${job.current_stage}`
-                : isCompleted
+              {isCompleted
                 ? t('analysis.completed')
-                : locale === 'vi'
-                ? 'Đang khởi chạy luồng công việc...'
-                : 'Initializing pipeline...'}
+                : isFailed
+                ? `${t('analysis.failed')} (${getStageLabel(job?.current_stage)})`
+                : `${locale === 'vi' ? 'Tiến độ tổng thể' : 'Overall progress'}: ${getStageLabel(job?.current_stage)}`}
             </span>
-            <span>{isCompleted ? '100%' : `${progressPct}%`}</span>
+            <span className="font-mono">{overallPct}%</span>
           </div>
           <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
             <div
               className={`h-full rounded-full transition-all duration-500 ${
                 isFailed ? 'bg-red-500' : isCompleted ? 'bg-emerald-500' : 'bg-teal-600'
               }`}
-              style={{ width: `${isCompleted ? 100 : progressPct}%` }}
+              style={{ width: `${overallPct}%` }}
             />
           </div>
         </div>
+
+        {/* Separate Frame-Processing Sub-Progress */}
+        {hasFrameCounts && (
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-700">
+              <span className="font-semibold">
+                {locale === 'vi' ? 'Xử lý khung hình (YOLO Pose)' : 'YOLO Frame Processing'}
+              </span>
+              <span className="font-mono font-semibold text-teal-700">
+                {safeProcessedFrames} / {job?.total_frames} {locale === 'vi' ? 'khung hình' : 'frames'} ({framePct}%)
+              </span>
+            </div>
+            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-sky-500 rounded-full transition-all duration-300"
+                style={{ width: `${framePct}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Visual Pipeline Stages */}
         <div className="space-y-3 pt-2">
@@ -147,15 +232,21 @@ export default function AnalysisProgressPage({
             {locale === 'vi' ? 'Các giai đoạn thực tế của mô hình:' : 'Pipeline Execution Stages:'}
           </span>
           <div className="space-y-2">
-            {stages.map((stg, idx) => {
-              const isDone = isCompleted || progressPct > (idx + 1) * 20
-              const isCurrent = !isCompleted && !isFailed && progressPct >= idx * 20 && progressPct <= (idx + 1) * 20
+            {stages.map((stg) => {
+              const firstIdx = Math.min(...stg.match.map((m) => stageOrder.indexOf(m)))
+              const lastIdx = Math.max(...stg.match.map((m) => stageOrder.indexOf(m)))
+              const isCurrent = !isCompleted && !isFailed && !!job?.current_stage && stg.match.includes(job.current_stage)
+              const isDone = isCompleted || (!isCurrent && currentStageIdx > lastIdx)
+              const isStageFailed = isFailed && !!job?.current_stage && stg.match.includes(job.current_stage)
+              const isPending = !isDone && !isCurrent && !isStageFailed
 
               return (
                 <div
                   key={stg.id}
                   className={`p-3 rounded-xl border flex items-center justify-between transition text-xs ${
-                    isDone
+                    isStageFailed
+                      ? 'bg-red-50 border-red-300 text-red-900 font-semibold'
+                      : isDone
                       ? 'bg-emerald-50/50 border-emerald-200 text-emerald-900'
                       : isCurrent
                       ? 'bg-teal-50 border-teal-300 text-teal-900 font-semibold'
@@ -163,7 +254,9 @@ export default function AnalysisProgressPage({
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    {isDone ? (
+                    {isStageFailed ? (
+                      <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                    ) : isDone ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     ) : isCurrent ? (
                       <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -173,11 +266,15 @@ export default function AnalysisProgressPage({
                     <span>{stg.label}</span>
                   </div>
                   <span className="text-[11px] font-mono">
-                    {isDone
+                    {isStageFailed
+                      ? locale === 'vi' ? 'Thất bại' : 'Failed'
+                      : isDone
                       ? locale === 'vi' ? 'Hoàn tất' : 'Done'
                       : isCurrent
                       ? locale === 'vi' ? 'Đang chạy' : 'Processing'
-                      : locale === 'vi' ? 'Chờ' : 'Pending'}
+                      : isPending
+                      ? locale === 'vi' ? 'Chờ' : 'Pending'
+                      : ''}
                   </span>
                 </div>
               )
@@ -237,7 +334,7 @@ export default function AnalysisProgressPage({
         {isCompleted && (
           <div className="pt-2 flex justify-end">
             <Link
-              href={`/sessions/${sessionId}/results?recording_id=${recordingId}`}
+              href={`/sessions/${sessionId}/results?recording_id=${targetRecordingId}`}
               className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs transition"
             >
               <span>{t('analysis.viewResults')}</span>

@@ -70,15 +70,19 @@ export default function SessionResultsPage({
         if (!isMounted) return null
         setJob(j)
 
+        if (j.recording_id && !recordingId) {
+          setActiveRecordingId(j.recording_id)
+        }
+
         if (j.status === 'completed') {
           assessmentsApi.get(sessionId).then((ass) => isMounted && ass && setAssessment(ass)).catch(() => null)
-          recordingsApi.list(sessionId).then((res) => {
-            if (isMounted && res?.items) {
-              setRecordings(res.items)
+          recordingsApi.list(sessionId).then((recs) => {
+            if (isMounted && Array.isArray(recs)) {
+              setRecordings(recs)
               if (j.recording_id) {
                 setActiveRecordingId(j.recording_id)
               } else {
-                const comp = res.items.find((r) => r.annotation_status === 'completed')
+                const comp = recs.find((r) => r.annotation_status === 'completed')
                 if (comp) setActiveRecordingId(comp.id)
               }
             }
@@ -141,8 +145,12 @@ export default function SessionResultsPage({
         return locale === 'vi' ? 'Đánh giá dáng đi' : 'Running gait assessment'
       case 'generate_reports':
         return locale === 'vi' ? 'Tạo báo cáo kết quả' : 'Generating reports'
+      case 'annotate_recording':
+        return locale === 'vi' ? 'Vẽ khung xương & xuất video MP4' : 'Rendering annotated MP4 video'
       case 'finalize':
         return locale === 'vi' ? 'Hoàn tất phân tích' : 'Finalizing analysis'
+      case 'queued_retry':
+        return locale === 'vi' ? 'Đang xếp hàng chạy lại...' : 'Queued for retry...'
       default:
         return stage.replace(/_/g, ' ')
     }
@@ -152,29 +160,34 @@ export default function SessionResultsPage({
   const isJobFailed = job?.status === 'failed' || job?.status === 'cancelled'
   const isJobCompleted = job?.status === 'completed'
 
-  const hasFrameCounts = !!(job?.total_frames && job.total_frames > 0)
-  const calculatedPct = hasFrameCounts
-    ? Math.min(100, Math.round(((job?.processed_frames || 0) / (job?.total_frames || 1)) * 100))
-    : isJobCompleted
+  // Overall job progress (0..99% while running, 100% ONLY when completed)
+  const overallPct = isJobCompleted
     ? 100
-    : job?.progress_pct
-    ? Math.round(job.progress_pct)
+    : Math.min(99, Math.max(0, Math.round(job?.progress_pct ?? 0)))
+
+  // Separate frame-processing percentage: (processed_frames / total_frames) * 100
+  const hasFrameCounts = !!(job?.total_frames && job.total_frames > 0)
+  const safeProcessedFrames = hasFrameCounts
+    ? Math.min(job?.processed_frames || 0, job!.total_frames!)
+    : 0
+  const framePct = hasFrameCounts
+    ? Math.min(100, Math.max(0, Math.round((safeProcessedFrames / job!.total_frames!) * 100)))
     : 0
 
   useEffect(() => {
     Promise.all([
       assessmentsApi.get(sessionId).catch(() => null),
       sessionsApi.get(sessionId).catch(() => null),
-      recordingsApi.list(sessionId).catch(() => ({ items: [] })),
+      recordingsApi.list(sessionId).catch(() => [] as Recording[]),
     ])
       .then(([ass, sess, recList]) => {
         if (ass) setAssessment(ass)
         if (sess) setSession(sess)
-        if (recList?.items) {
-          setRecordings(recList.items)
-          if (!activeRecordingId && recList.items.length > 0) {
-            const comp = recList.items.find((r) => r.annotation_status === 'completed')
-            setActiveRecordingId(comp ? comp.id : recList.items[0].id)
+        if (Array.isArray(recList)) {
+          setRecordings(recList)
+          if (!recordingId && recList.length > 0) {
+            const comp = recList.find((r) => r.annotation_status === 'completed')
+            setActiveRecordingId((prev) => prev || (comp ? comp.id : recList[recList.length - 1].id))
           }
         }
       })
@@ -182,7 +195,7 @@ export default function SessionResultsPage({
         setError(err.message || 'Failed to load assessment data')
       })
       .finally(() => setLoading(false))
-  }, [sessionId, activeRecordingId])
+  }, [sessionId, recordingId])
 
   const toggleExpand = (featureName: string) => {
     setExpandedFeatures((prev) => ({ ...prev, [featureName]: !prev[featureName] }))
@@ -197,7 +210,11 @@ export default function SessionResultsPage({
     if (!activeRecordingId || activeRec?.annotation_status !== 'completed') {
       setVideoBlobUrl(null)
       setVideoLoading(false)
-      setVideoError(null)
+      if (activeRec?.annotation_status === 'failed') {
+        setVideoError(locale === 'vi' ? 'Quá trình tạo video chú thích đã thất bại.' : 'Annotated video generation failed.')
+      } else {
+        setVideoError(null)
+      }
       return
     }
 
@@ -210,9 +227,9 @@ export default function SessionResultsPage({
       })
       .then((res) => {
         if (isCancelled) return
-        const contentType = res.headers['content-type'] || res.data?.type || ''
-        if (contentType.includes('text/html') || contentType.includes('application/json')) {
-          setVideoError(locale === 'vi' ? 'Không thể phát video.' : 'Failed to load video.')
+        const contentType = String(res.headers['content-type'] || res.data?.type || '')
+        if (contentType.includes('text/html') || contentType.includes('application/json') || !res.data || res.data.size === 0) {
+          setVideoError(locale === 'vi' ? 'Tệp video không hợp lệ hoặc bị trống.' : 'Invalid or empty video response.')
           setVideoLoading(false)
           return
         }
@@ -221,13 +238,15 @@ export default function SessionResultsPage({
         setVideoBlobUrl(currentBlobUrl)
         setVideoLoading(false)
       })
-      .catch((err) => {
+      .catch(async (err) => {
         if (isCancelled) return
         setVideoLoading(false)
         if (err.response?.status === 403) {
           setVideoError(locale === 'vi' ? 'Không có quyền truy cập video này.' : 'Unauthorized to view this video.')
         } else if (err.response?.status === 404) {
-          setVideoError(locale === 'vi' ? 'Không tìm thấy video đã phân tích.' : 'Annotated video not found.')
+          setVideoError(locale === 'vi' ? 'Không tìm thấy video đã phân tích trên máy chủ.' : 'Annotated video file not found on server.')
+        } else if (err.response?.status === 409) {
+          setVideoError(locale === 'vi' ? 'Video chú thích chưa hoàn tất.' : 'Annotated video is not ready yet.')
         } else {
           setVideoError(locale === 'vi' ? 'Lỗi khi tải video.' : 'Error loading video.')
         }
@@ -250,9 +269,9 @@ export default function SessionResultsPage({
         const res = await api.get(`/api/v1/recordings/${activeRecordingId}/annotated-video`, {
           responseType: 'blob',
         })
-        const contentType = res.headers['content-type'] || res.data?.type || ''
-        if (contentType.includes('text/html') || contentType.includes('application/json')) {
-          setError(locale === 'vi' ? 'Không thể tải video MP4.' : 'Failed to download MP4 video.')
+        const contentType = String(res.headers['content-type'] || res.data?.type || '')
+        if (contentType.includes('text/html') || contentType.includes('application/json') || !res.data || res.data.size === 0) {
+          setVideoError(locale === 'vi' ? 'Không thể tải video MP4 hợp lệ.' : 'Failed to download valid MP4 video.')
           return
         }
         const blob = new Blob([res.data], { type: 'video/mp4' })
@@ -268,8 +287,16 @@ export default function SessionResultsPage({
       if (shouldRevoke && downloadUrl) {
         window.URL.revokeObjectURL(downloadUrl)
       }
-    } catch {
-      setError(locale === 'vi' ? 'Không thể tải video MP4.' : 'Failed to download MP4 video.')
+    } catch (err: any) {
+      let detail = locale === 'vi' ? 'Không thể tải video MP4.' : 'Failed to download MP4 video.'
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text()
+          const parsed = JSON.parse(text)
+          if (parsed?.detail) detail = parsed.detail
+        } catch {}
+      }
+      setVideoError(detail)
     }
   }
 
@@ -416,26 +443,42 @@ export default function SessionResultsPage({
                     <p className="text-sm font-semibold text-white">
                       {getStageLabel(job?.current_stage)}
                     </p>
-                    {hasFrameCounts && (
-                      <p className="text-xs font-mono text-teal-300">
-                        {job?.processed_frames} / {job?.total_frames} {locale === 'vi' ? 'khung hình' : 'frames'}
-                      </p>
-                    )}
+                    <p className="text-[11px] text-slate-400">
+                      {locale === 'vi' ? 'Tiến độ tổng thể' : 'Overall pipeline progress'}: <span className="font-mono text-teal-300 font-semibold">{overallPct}%</span>
+                    </p>
                   </div>
 
-                  {/* Real-time Progress Bar */}
-                  <div className="space-y-1.5">
+                  {/* Overall Pipeline Progress Bar */}
+                  <div className="space-y-1">
                     <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden border border-slate-700">
                       <div
                         className="h-full bg-teal-500 rounded-full transition-all duration-300"
-                        style={{ width: `${calculatedPct}%` }}
+                        style={{ width: `${overallPct}%` }}
                       />
                     </div>
                     <div className="flex justify-between text-[11px] font-mono text-slate-400">
                       <span>{job?.current_stage ? job.current_stage.replace(/_/g, ' ') : 'processing'}</span>
-                      <span className="font-semibold text-teal-400">{calculatedPct}%</span>
+                      <span className="font-semibold text-teal-400">{overallPct}%</span>
                     </div>
                   </div>
+
+                  {/* Frame-Processing Progress (Distinct from Overall Progress) */}
+                  {hasFrameCounts && (
+                    <div className="pt-2 border-t border-slate-800 space-y-1">
+                      <div className="flex justify-between text-[11px] font-mono text-slate-300">
+                        <span>{locale === 'vi' ? 'Khung hình YOLO' : 'Frame processing'}</span>
+                        <span className="text-sky-300 font-semibold">
+                          {safeProcessedFrames} / {job?.total_frames} {locale === 'vi' ? 'khung hình' : 'frames'} ({framePct}%)
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-sky-500 rounded-full transition-all duration-300"
+                          style={{ width: `${framePct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : isJobFailed ? (
                 <div className="p-8 text-center text-rose-300 space-y-3 max-w-md">
@@ -476,6 +519,13 @@ export default function SessionResultsPage({
                   playsInline
                   className="w-full h-full object-contain"
                   src={videoBlobUrl}
+                  onError={() =>
+                    setVideoError(
+                      locale === 'vi'
+                        ? 'Trình duyệt không thể giải mã video MP4 này. Hãy thử tải tệp MP4 xuống.'
+                        : 'Browser could not decode this MP4 video stream. Try downloading the MP4 file.'
+                    )
+                  }
                 >
                   <p className="text-white text-xs p-4">
                     {t('results.noAnnotation')}
@@ -495,19 +545,23 @@ export default function SessionResultsPage({
                   className={`w-2 h-2 rounded-full ${
                     isJobRunning
                       ? 'bg-amber-500 animate-pulse'
-                      : isJobFailed
+                      : isJobFailed || videoError
                       ? 'bg-rose-500'
-                      : 'bg-emerald-500 animate-pulse'
+                      : activeRec?.annotation_status === 'completed' && videoBlobUrl
+                      ? 'bg-emerald-500'
+                      : 'bg-slate-400'
                   }`}
                 />
                 <span>
                   {isJobRunning
-                    ? `${getStageLabel(job?.current_stage)} (${calculatedPct}%)`
+                    ? `${getStageLabel(job?.current_stage)} (${overallPct}%)`
                     : isJobFailed
                     ? locale === 'vi' ? 'Phân tích thất bại' : 'Analysis failed'
+                    : videoError
+                    ? videoError
                     : activeRec?.annotation_status === 'completed'
                     ? locale === 'vi' ? 'Video đã vẽ khung xương hoàn tất (100%)' : 'Annotated video ready (100%)'
-                    : locale === 'vi' ? 'Đang chờ xử lý video' : 'Video processing...'}
+                    : locale === 'vi' ? 'Video chú thích chưa sẵn sàng' : 'Annotated video not ready'}
                 </span>
               </div>
               <button

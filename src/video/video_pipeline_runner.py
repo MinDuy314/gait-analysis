@@ -87,8 +87,9 @@ def process_video_pipeline(
         )
         poses.append(pose)
         processed_count += 1
+        effective_total = max(total_expected_frames or 0, processed_count)
         if progress_callback:
-            progress_callback(processed_count, total_expected_frames or processed_count)
+            progress_callback(processed_count, effective_total)
 
     # 3. Camera view classification
     classifier = CameraViewClassifier()

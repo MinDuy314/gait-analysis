@@ -58,7 +58,14 @@ def retry_job(
         raise HTTPException(status_code=400, detail=f"Cannot retry job with status {j.status}")
 
     j.retry_count += 1
-    JobRepository(db).update_status(job_id, "queued", stage="queued_retry", progress=0.0)
+    JobRepository(db).update_status(
+        job_id,
+        "queued",
+        stage="queued_retry",
+        progress=0.0,
+        processed_frames=0,
+        total_frames=0,
+    )
 
     recording_path = ""
     if j.recording_id:

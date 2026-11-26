@@ -160,9 +160,9 @@ def annotate_video(
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Attempt mp4v with fallback to avc1
+        # Prefer browser-compatible H.264 codecs first, falling back to mp4v/XVID
         writer = None
-        for code in ("mp4v", "avc1", "XVID"):
+        for code in ("avc1", "H264", "mp4v", "XVID"):
             fourcc = cv2.VideoWriter_fourcc(*code)
             w = cv2.VideoWriter(str(output_path), fourcc, out_fps, (width, height))
             if w.isOpened():

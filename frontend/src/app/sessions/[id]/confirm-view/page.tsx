@@ -3,7 +3,7 @@
 import React, { useState, useEffect, use } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { sessionsApi, analysisApi } from '@/lib/api'
+import { sessionsApi, analysisApi, recordingsApi } from '@/lib/api'
 import { useLanguage } from '@/context/LanguageContext'
 import {
   Camera,
@@ -30,10 +30,11 @@ export default function ConfirmViewPage({
   const { t, locale } = useLanguage()
 
   const [cameraView, setCameraView] = useState<'front' | 'side'>('front')
+  const [resolvedRecId, setResolvedRecId] = useState<string>(recordingId)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch session to see default configured view
+  // Fetch session and fallback recording if missing from query params
   useEffect(() => {
     sessionsApi
       .get(sessionId)
@@ -43,21 +44,33 @@ export default function ConfirmViewPage({
         }
       })
       .catch((err) => console.error(err))
-  }, [sessionId])
+
+    if (!recordingId) {
+      recordingsApi
+        .list(sessionId)
+        .then((recs) => {
+          if (recs.length > 0) {
+            setResolvedRecId(recs[recs.length - 1].id)
+          }
+        })
+        .catch(() => null)
+    }
+  }, [sessionId, recordingId])
 
   const handleStartAnalysis = async () => {
     setIsSubmitting(true)
     setError(null)
 
     try {
+      const targetRecId = resolvedRecId || recordingId || undefined
       const job = await analysisApi.submit(sessionId, {
-        recording_id: recordingId || undefined,
+        recording_id: targetRecId,
         camera_view: cameraView,
         pose_model: 'yolo',
       })
 
       // Redirect to progress polling page
-      router.push(`/sessions/${sessionId}/analysis?job_id=${job.id}&recording_id=${recordingId}`)
+      router.push(`/sessions/${sessionId}/analysis?job_id=${job.id}&recording_id=${targetRecId || ''}`)
     } catch (err: any) {
       setError(err.response?.data?.detail || t('common.error'))
       setIsSubmitting(false)

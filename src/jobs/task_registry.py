@@ -19,13 +19,28 @@ PIPELINE_STAGES = [
     "quality_control",
     "assess",
     "generate_reports",
+    "annotate_recording",
     "finalize",
 ]
 
+_STAGE_PROGRESS_PCT: Dict[str, float] = {
+    "validate_recording": 2.0,
+    "extract_frames": 5.0,
+    "estimate_pose": 10.0,
+    "detect_view": 62.0,
+    "detect_events": 66.0,
+    "segment_cycles": 70.0,
+    "extract_features": 74.0,
+    "quality_control": 78.0,
+    "assess": 82.0,
+    "generate_reports": 86.0,
+    "annotate_recording": 90.0,
+    "finalize": 98.0,
+}
+
 
 def _stage_progress(stage_name: str) -> float:
-    idx = PIPELINE_STAGES.index(stage_name) if stage_name in PIPELINE_STAGES else 0
-    return round(idx / len(PIPELINE_STAGES) * 100, 1)
+    return _STAGE_PROGRESS_PCT.get(stage_name, 0.0)
 
 
 def run_analysis_pipeline(
@@ -54,7 +69,9 @@ def run_analysis_pipeline(
     }
 
     def _update(stage: str, pct: Optional[float] = None, processed_frames: Optional[int] = None, total_frames: Optional[int] = None):
-        p = pct if pct is not None else _stage_progress(stage)
+        raw_p = pct if pct is not None else _stage_progress(stage)
+        # Never report 100% while status is still running
+        p = min(99.9, max(0.0, round(float(raw_p), 1)))
         repo.update_status(
             job_id,
             "running",
@@ -120,21 +137,25 @@ def run_analysis_pipeline(
 
             # Stages 2-8: Execute real video pipeline (pose estimation, view detection, events, cycles, features)
             _update("extract_frames")
+            _update("estimate_pose")
 
             def on_frame_progress(proc_f: int, tot_f: int):
-                # Calculate progress dynamically during pose estimation stage
-                # Stage 3 'estimate_pose' is index 2 in PIPELINE_STAGES
-                # We can calculate percentage between stage 2 and stage 4
+                safe_tot = max(tot_f or 0, proc_f, 1)
+                safe_proc = min(proc_f, safe_tot)
+                step = max(1, safe_tot // 50)
+                if safe_proc != 1 and safe_proc < safe_tot and (safe_proc % step) != 0:
+                    return
+                # Map frame processing progress (0..100%) onto estimate_pose overall range (10%..60%)
                 base_pct = _stage_progress("estimate_pose")
                 next_pct = _stage_progress("detect_view")
                 stage_range = next_pct - base_pct
-                frac = (proc_f / tot_f) if tot_f and tot_f > 0 else 0.0
-                current_pct = round(base_pct + (frac * stage_range), 1)
+                frac = min(1.0, max(0.0, safe_proc / safe_tot))
+                current_pct = round(base_pct + (frac * (stage_range - 2.0)), 1)
                 _update(
                     stage="estimate_pose",
                     pct=current_pct,
-                    processed_frames=proc_f,
-                    total_frames=tot_f,
+                    processed_frames=safe_proc,
+                    total_frames=safe_tot,
                 )
 
             from src.video.video_pipeline_runner import process_video_pipeline
@@ -150,7 +171,9 @@ def run_analysis_pipeline(
             if pipeline_result.camera_view.predicted_view != "unknown":
                 effective_camera_view = pipeline_result.camera_view.predicted_view
 
-            for stage in PIPELINE_STAGES[1:8]:
+            # Mark extract_frames & estimate_pose completed without moving progress backwards
+            partial_results["stages_completed"].extend(["extract_frames", "estimate_pose"])
+            for stage in PIPELINE_STAGES[3:8]:
                 _update(stage)
                 partial_results["stages_completed"].append(stage)
 
@@ -239,6 +262,7 @@ def run_analysis_pipeline(
         # If annotation fails, the job must NOT be marked fully completed.   #
         # ------------------------------------------------------------------ #
         if recording_path and recording_id:
+            _update("annotate_recording")
             _annotate_recording(
                 db=db,
                 recording_path=recording_path,
@@ -257,9 +281,10 @@ def run_analysis_pipeline(
                 )
                 logger.warning("Job %s marked failed because annotation failed: %s", job_id, err_msg)
                 return
+            partial_results["stages_completed"].append("annotate_recording")
 
-        # Stage 11: Finalize
-        _update("finalize", pct=100.0)
+        # Stage 12: Finalize — only set 100.0 when completed
+        _update("finalize")
         partial_results["stages_completed"].append("finalize")
 
         repo.update_status(job_id, "completed", stage="finalize", progress=100.0, result=partial_results)
