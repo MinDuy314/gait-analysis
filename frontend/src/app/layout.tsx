@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Providers } from './providers'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 export const metadata: Metadata = {
   title: 'Gait Analysis Platform | Hệ Thống Phân Tích Dáng Đi',
@@ -19,6 +20,7 @@ export default function RootLayout({
         <Providers>
           <AppLayout>{children}</AppLayout>
         </Providers>
+        <SpeedInsights />
       </body>
     </html>
   )
