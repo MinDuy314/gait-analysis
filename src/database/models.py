@@ -89,6 +89,8 @@ class AnalysisJob(Base):
     status = Column(String, default="queued")  # queued, running, completed, partially_completed, failed, cancelled
     current_stage = Column(String, nullable=True)
     progress_pct = Column(Float, default=0.0)
+    processed_frames = Column(Integer, default=0)
+    total_frames = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
     retry_count = Column(Integer, default=0)
     max_retries = Column(Integer, default=3)

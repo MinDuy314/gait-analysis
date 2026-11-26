@@ -134,7 +134,25 @@ class JobRepository:
     def get(self, job_id: str) -> Optional[AnalysisJob]:
         return self.db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
 
-    def update_status(self, job_id: str, status: str, stage: Optional[str] = None, progress: Optional[float] = None, error: Optional[str] = None, result: Optional[Dict] = None):
+    def get_latest_for_session(self, session_id: str) -> Optional[AnalysisJob]:
+        return (
+            self.db.query(AnalysisJob)
+            .filter(AnalysisJob.session_id == session_id)
+            .order_by(AnalysisJob.created_at.desc())
+            .first()
+        )
+
+    def update_status(
+        self,
+        job_id: str,
+        status: str,
+        stage: Optional[str] = None,
+        progress: Optional[float] = None,
+        error: Optional[str] = None,
+        result: Optional[Dict] = None,
+        processed_frames: Optional[int] = None,
+        total_frames: Optional[int] = None,
+    ):
         j = self.get(job_id)
         if not j:
             return
@@ -143,6 +161,10 @@ class JobRepository:
             j.current_stage = stage
         if progress is not None:
             j.progress_pct = progress
+        if processed_frames is not None:
+            j.processed_frames = processed_frames
+        if total_frames is not None:
+            j.total_frames = total_frames
         if error:
             j.error_message = error
         if result is not None:

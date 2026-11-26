@@ -50,6 +50,8 @@ class JobResponse(BaseModel):
     status: str
     current_stage: Optional[str] = None
     progress_pct: float = 0.0
+    processed_frames: int = 0
+    total_frames: int = 0
     error_message: Optional[str] = None
     retry_count: int = 0
     created_at: datetime

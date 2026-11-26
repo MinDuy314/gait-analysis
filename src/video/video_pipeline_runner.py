@@ -47,6 +47,7 @@ def process_video_pipeline(
     frame_stride: int = 1,
     max_frames: Optional[int] = None,
     cfg: Optional[AppConfig] = None,
+    progress_callback: Optional[callable] = None,
 ) -> VideoAnalysisResult:
     """Execute complete video processing pipeline from ingestion to feature extraction."""
     cfg = cfg or AppConfig()
@@ -59,11 +60,19 @@ def process_video_pipeline(
         raise ValueError(f"Video validation failed for {path_obj.name}: {'; '.join(reasons)}")
 
     meta = val_res.metadata
+    total_expected_frames = meta.frame_count
+    if frame_stride > 1 and total_expected_frames:
+        total_expected_frames = (total_expected_frames + frame_stride - 1) // frame_stride
+    if max_frames is not None and total_expected_frames:
+        total_expected_frames = min(total_expected_frames, max_frames)
+    elif max_frames is not None:
+        total_expected_frames = max_frames
 
     # 2. Pose estimation initialization
     estimator = create_pose_estimator(estimator_type=estimator_type, device=device)
 
     poses: List[FramePose] = []
+    processed_count = 0
     for frame_obj in extract_frames(
         video_path=path_obj,
         frame_stride=frame_stride,
@@ -77,6 +86,9 @@ def process_video_pipeline(
             orig_height=frame_obj.orig_height,
         )
         poses.append(pose)
+        processed_count += 1
+        if progress_callback:
+            progress_callback(processed_count, total_expected_frames or processed_count)
 
     # 3. Camera view classification
     classifier = CameraViewClassifier()

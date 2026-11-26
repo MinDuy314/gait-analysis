@@ -3,11 +3,11 @@
 import React, { useEffect, useState, use } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { assessmentsApi, recordingsApi, sessionsApi } from '@/lib/api'
+import { assessmentsApi, recordingsApi, sessionsApi, jobsApi } from '@/lib/api'
 import api from '@/lib/api-client'
 import { useAuth } from '@/context/AuthContext'
 import { useLanguage } from '@/context/LanguageContext'
-import type { Assessment, Session, Recording, FeatureInterpretation } from '@/types/api'
+import type { Assessment, Session, Recording, FeatureInterpretation, Job } from '@/types/api'
 import {
   Video,
   Activity,
@@ -22,7 +22,8 @@ import {
   ChevronUp,
   ShieldAlert,
   Info,
-  Maximize2
+  Maximize2,
+  RotateCcw
 } from 'lucide-react'
 
 export default function SessionResultsPage({
@@ -54,6 +55,103 @@ export default function SessionResultsPage({
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoError, setVideoError] = useState<string | null>(null)
+
+  // Real-time Job Progress State
+  const [job, setJob] = useState<Job | null>(null)
+  const [isRetryingJob, setIsRetryingJob] = useState(false)
+
+  // Polling for Analysis Job status while running or pending
+  useEffect(() => {
+    let isMounted = true
+
+    const pollJob = async () => {
+      try {
+        const j = await jobsApi.getBySession(sessionId)
+        if (!isMounted) return null
+        setJob(j)
+
+        if (j.status === 'completed') {
+          assessmentsApi.get(sessionId).then((ass) => isMounted && ass && setAssessment(ass)).catch(() => null)
+          recordingsApi.list(sessionId).then((res) => {
+            if (isMounted && res?.items) setRecordings(res.items)
+          }).catch(() => null)
+        }
+        return j
+      } catch {
+        return null
+      }
+    }
+
+    pollJob()
+
+    const interval = setInterval(async () => {
+      const current = await pollJob()
+      if (current && (current.status === 'completed' || current.status === 'failed' || current.status === 'cancelled')) {
+        clearInterval(interval)
+      }
+    }, 1500)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [sessionId])
+
+  const handleRetryJob = async () => {
+    if (!job?.id) return
+    setIsRetryingJob(true)
+    try {
+      const refreshed = await jobsApi.retry(job.id)
+      setJob(refreshed)
+    } catch (err: any) {
+      alert(err.response?.data?.detail || t('common.error'))
+    } finally {
+      setIsRetryingJob(false)
+    }
+  }
+
+  const getStageLabel = (stage?: string): string => {
+    if (!stage) return locale === 'vi' ? 'Đang chuẩn bị...' : 'Preparing pipeline...'
+    switch (stage) {
+      case 'validate_recording':
+        return locale === 'vi' ? 'Kiểm tra tệp video' : 'Validating video'
+      case 'extract_frames':
+        return locale === 'vi' ? 'Trích xuất khung hình' : 'Extracting frames'
+      case 'estimate_pose':
+        return locale === 'vi' ? 'Xử lý khung hình' : 'Processing frames'
+      case 'detect_view':
+        return locale === 'vi' ? 'Nhận diện góc quay' : 'Detecting camera view'
+      case 'detect_events':
+        return locale === 'vi' ? 'Phát hiện sự kiện dáng đi' : 'Detecting gait events'
+      case 'segment_cycles':
+        return locale === 'vi' ? 'Phân đoạn chu kỳ bước' : 'Segmenting gait cycles'
+      case 'extract_features':
+        return locale === 'vi' ? 'Tính toán đặc trưng cơ sinh học' : 'Extracting biomechanical features'
+      case 'quality_control':
+        return locale === 'vi' ? 'Kiểm định chất lượng' : 'Quality control'
+      case 'assess':
+        return locale === 'vi' ? 'Đánh giá dáng đi' : 'Running gait assessment'
+      case 'generate_reports':
+        return locale === 'vi' ? 'Tạo báo cáo kết quả' : 'Generating reports'
+      case 'finalize':
+        return locale === 'vi' ? 'Hoàn tất phân tích' : 'Finalizing analysis'
+      default:
+        return stage.replace(/_/g, ' ')
+    }
+  }
+
+  const isJobRunning = job?.status === 'running' || job?.status === 'queued'
+  const isJobFailed = job?.status === 'failed' || job?.status === 'cancelled'
+  const isJobCompleted = job?.status === 'completed'
+
+  const hasFrameCounts = !!(job?.total_frames && job.total_frames > 0)
+  const calculatedPct = hasFrameCounts
+    ? Math.min(100, Math.round(((job?.processed_frames || 0) / (job?.total_frames || 1)) * 100))
+    : isJobCompleted
+    ? 100
+    : job?.progress_pct
+    ? Math.round(job.progress_pct)
+    : 0
 
   useEffect(() => {
     Promise.all([
@@ -301,7 +399,59 @@ export default function SessionResultsPage({
 
             {/* Video Player Container */}
             <div className="bg-black aspect-video relative flex items-center justify-center">
-              {videoLoading ? (
+              {isJobRunning ? (
+                <div className="w-full max-w-md px-6 py-8 text-center text-slate-200 space-y-4">
+                  <div className="w-8 h-8 border-3 border-teal-400 border-t-transparent rounded-full animate-spin mx-auto" />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-white">
+                      {getStageLabel(job?.current_stage)}
+                    </p>
+                    {hasFrameCounts && (
+                      <p className="text-xs font-mono text-teal-300">
+                        {job?.processed_frames} / {job?.total_frames} {locale === 'vi' ? 'khung hình' : 'frames'}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Real-time Progress Bar */}
+                  <div className="space-y-1.5">
+                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                      <div
+                        className="h-full bg-teal-500 rounded-full transition-all duration-300"
+                        style={{ width: `${calculatedPct}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[11px] font-mono text-slate-400">
+                      <span>{job?.current_stage ? job.current_stage.replace(/_/g, ' ') : 'processing'}</span>
+                      <span className="font-semibold text-teal-400">{calculatedPct}%</span>
+                    </div>
+                  </div>
+                </div>
+              ) : isJobFailed ? (
+                <div className="p-8 text-center text-rose-300 space-y-3 max-w-md">
+                  <AlertCircle className="w-8 h-8 mx-auto text-rose-400" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-white">
+                      {locale === 'vi' ? 'Phân tích video thất bại' : 'Video Analysis Failed'}
+                    </p>
+                    <p className="text-xs text-rose-300 break-words">
+                      {job?.error_message || error || (locale === 'vi' ? 'Đã xảy ra lỗi trong quá trình xử lý.' : 'An error occurred during processing.')}
+                    </p>
+                  </div>
+                  {job?.id && (
+                    <button
+                      type="button"
+                      onClick={handleRetryJob}
+                      disabled={isRetryingJob}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50"
+                    >
+                      <RotateCcw className={`w-3.5 h-3.5 ${isRetryingJob ? 'animate-spin' : ''}`} />
+                      <span>{locale === 'vi' ? 'Thử lại phân tích' : 'Retry Analysis'}</span>
+                    </button>
+                  )}
+                </div>
+              ) : videoLoading ? (
                 <div className="p-8 text-center text-slate-300 space-y-2">
                   <div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                   <p className="text-xs">{locale === 'vi' ? 'Đang tải video...' : 'Loading video...'}</p>
@@ -332,10 +482,22 @@ export default function SessionResultsPage({
 
             <div className="p-4 bg-slate-50/70 border-t border-slate-100 text-xs text-slate-600 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isJobRunning
+                      ? 'bg-amber-500 animate-pulse'
+                      : isJobFailed
+                      ? 'bg-rose-500'
+                      : 'bg-emerald-500 animate-pulse'
+                  }`}
+                />
                 <span>
-                  {activeRec?.annotation_status === 'completed'
-                    ? locale === 'vi' ? 'Video đã vẽ khung xương hoàn tất' : 'Annotated video ready'
+                  {isJobRunning
+                    ? `${getStageLabel(job?.current_stage)} (${calculatedPct}%)`
+                    : isJobFailed
+                    ? locale === 'vi' ? 'Phân tích thất bại' : 'Analysis failed'
+                    : activeRec?.annotation_status === 'completed'
+                    ? locale === 'vi' ? 'Video đã vẽ khung xương hoàn tất (100%)' : 'Annotated video ready (100%)'
                     : locale === 'vi' ? 'Đang chờ xử lý video' : 'Video processing...'}
                 </span>
               </div>

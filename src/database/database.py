@@ -45,6 +45,12 @@ def init_db(db_url: str = None):
                 conn.commit()
             except Exception:
                 pass  # Column already exists — no action needed.
+        for col_def in ("processed_frames INTEGER DEFAULT 0", "total_frames INTEGER DEFAULT 0"):
+            try:
+                conn.execute(text(f"ALTER TABLE analysis_jobs ADD COLUMN {col_def}"))
+                conn.commit()
+            except Exception:
+                pass
         for tbl in ("users", "subjects"):
             try:
                 conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN organization_id TEXT DEFAULT 'default_org'"))

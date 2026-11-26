@@ -26,6 +26,21 @@ def get_job(
     return j
 
 
+@router.get("/api/v1/sessions/{session_id}/job", response_model=JobResponse)
+def get_latest_session_job(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    j = JobRepository(db).get_latest_for_session(session_id)
+    if not j:
+        raise HTTPException(status_code=404, detail="No job found for this session")
+    subj = SubjectRepository(db).get(j.subject_id)
+    if subj:
+        verify_subject_access(subj, current_user)
+    return j
+
+
 @router.post("/api/v1/jobs/{job_id}/retry", response_model=JobResponse)
 def retry_job(
     job_id: str,

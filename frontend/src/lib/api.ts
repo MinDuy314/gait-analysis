@@ -62,6 +62,7 @@ export const analysisApi = {
 // ─── Jobs ─────────────────────────────────────────────────────────────────
 export const jobsApi = {
   get: (id: string) => api.get<Job>(`/api/v1/jobs/${id}`).then(r => r.data),
+  getBySession: (sessionId: string) => api.get<Job>(`/api/v1/sessions/${sessionId}/job`).then(r => r.data),
   retry: (id: string) => api.post<Job>(`/api/v1/jobs/${id}/retry`).then(r => r.data),
   cancel: (id: string) => api.post(`/api/v1/jobs/${id}/cancel`).then(r => r.data),
 }

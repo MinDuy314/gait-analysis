@@ -53,9 +53,17 @@ def run_analysis_pipeline(
         "annotated_video_path": None,
     }
 
-    def _update(stage: str, pct: Optional[float] = None):
+    def _update(stage: str, pct: Optional[float] = None, processed_frames: Optional[int] = None, total_frames: Optional[int] = None):
         p = pct if pct is not None else _stage_progress(stage)
-        repo.update_status(job_id, "running", stage=stage, progress=p, result=partial_results)
+        repo.update_status(
+            job_id,
+            "running",
+            stage=stage,
+            progress=p,
+            result=partial_results,
+            processed_frames=processed_frames,
+            total_frames=total_frames,
+        )
 
     poses: List[Any] = []
     n_cycles: int = 0
@@ -112,11 +120,29 @@ def run_analysis_pipeline(
 
             # Stages 2-8: Execute real video pipeline (pose estimation, view detection, events, cycles, features)
             _update("extract_frames")
+
+            def on_frame_progress(proc_f: int, tot_f: int):
+                # Calculate progress dynamically during pose estimation stage
+                # Stage 3 'estimate_pose' is index 2 in PIPELINE_STAGES
+                # We can calculate percentage between stage 2 and stage 4
+                base_pct = _stage_progress("estimate_pose")
+                next_pct = _stage_progress("detect_view")
+                stage_range = next_pct - base_pct
+                frac = (proc_f / tot_f) if tot_f and tot_f > 0 else 0.0
+                current_pct = round(base_pct + (frac * stage_range), 1)
+                _update(
+                    stage="estimate_pose",
+                    pct=current_pct,
+                    processed_frames=proc_f,
+                    total_frames=tot_f,
+                )
+
             from src.video.video_pipeline_runner import process_video_pipeline
             pipeline_result = process_video_pipeline(
                 video_path=path_obj,
                 session_id=session_id,
                 estimator_type=pose_model,
+                progress_callback=on_frame_progress,
             )
 
             poses = pipeline_result.poses

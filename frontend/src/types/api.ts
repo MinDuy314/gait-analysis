@@ -59,6 +59,8 @@ export interface Job {
   status: JobStatus
   current_stage?: string
   progress_pct: number
+  processed_frames?: number
+  total_frames?: number
   error_message?: string
   retry_count: number
   created_at: string
