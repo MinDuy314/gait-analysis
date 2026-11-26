@@ -57,6 +57,7 @@ def test_full_e2e_user_and_session_flow(client):
     assert reg_res.status_code == 201
     token = reg_res.json()["access_token"]
     assert token
+    client.headers["Authorization"] = f"Bearer {token}"
 
     # 2. Verify identity via /me
     me_res = client.get(
@@ -103,6 +104,7 @@ def test_full_e2e_user_and_session_flow(client):
     assert sess_data["walking_speed_ms"] == 1.15
 
     # 7. Check Security: Unauthenticated access to protected routes
+    client.headers.pop("Authorization", None)
     unauth_res = client.get("/api/v1/auth/me")
     assert unauth_res.status_code == 401
 

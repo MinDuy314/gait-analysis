@@ -18,6 +18,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=True)
     hashed_password = Column(String, nullable=False)
     role = Column(String, default="individual")  # individual, professional, administrator
+    organization_id = Column(String, nullable=True, default="default_org")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -28,6 +29,7 @@ class Subject(Base):
     id = Column(String, primary_key=True, default=_uuid)
     display_name = Column(String, nullable=True)
     owner_id = Column(String, ForeignKey("users.id"), nullable=True)
+    organization_id = Column(String, nullable=True, default="default_org")
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -69,7 +69,24 @@ def client(engine):
         app.dependency_overrides[get_db] = _override_db
         app.dependency_overrides[get_storage] = _override_storage
         app.dependency_overrides[get_job_manager] = lambda: test_jm
+
+        with Session() as db:
+            from src.database import models
+            from src.api.auth.security import hash_password, create_access_token
+            u = models.User(
+                id=str(uuid.uuid4()),
+                username="test_clinician_av",
+                hashed_password=hash_password("Pass@123"),
+                role="professional",
+                organization_id="default_org",
+                is_active=True,
+            )
+            db.add(u)
+            db.commit()
+            token = create_access_token(data={"sub": u.id, "role": u.role})
+
         with TestClient(app) as c:
+            c.headers["Authorization"] = f"Bearer {token}"
             c.job_manager = test_jm
             yield c
         test_jm.wait_all(timeout=5.0)

@@ -56,3 +56,17 @@ def require_role(*roles: str):
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         return current_user
     return _check
+
+
+def verify_subject_access(subject, current_user: User) -> None:
+    """Enforce patient ownership and clinician/admin organization-scoped access."""
+    if current_user.role == "individual":
+        if not subject.owner_id or subject.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this subject")
+    elif current_user.role in ("professional", "administrator"):
+        user_org = getattr(current_user, "organization_id", None)
+        subj_org = getattr(subject, "organization_id", None)
+        if not user_org or not subj_org or user_org != subj_org:
+            raise HTTPException(status_code=403, detail="Not authorized: organization assignment missing or mismatched")
+    else:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")

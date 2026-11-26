@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.api.dependencies import get_db
+from src.api.auth.dependencies import get_current_user, verify_subject_access
 from src.api.schemas.requests import CompareSessionsRequest
-from src.database.models import BaselineRecord, ProgressRecord, AssessmentRecord
+from src.database.models import BaselineRecord, ProgressRecord, AssessmentRecord, User
 from src.database.repositories import SubjectRepository, SessionRepository
 from src.progress.progress_engine import ProgressEngine
 
@@ -10,10 +11,15 @@ router = APIRouter(tags=["progress"])
 
 
 @router.get("/api/v1/subjects/{subject_id}/progress")
-def get_progress(subject_id: str, db: Session = Depends(get_db)):
+def get_progress(
+    subject_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     s = SubjectRepository(db).get(subject_id)
     if not s:
         raise HTTPException(status_code=404, detail="Subject not found")
+    verify_subject_access(s, current_user)
     records = db.query(ProgressRecord).filter(
         ProgressRecord.subject_id == subject_id
     ).order_by(ProgressRecord.created_at.desc()).all()
@@ -32,10 +38,15 @@ def get_progress(subject_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/api/v1/subjects/{subject_id}/baselines")
-def get_baselines(subject_id: str, db: Session = Depends(get_db)):
+def get_baselines(
+    subject_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     s = SubjectRepository(db).get(subject_id)
     if not s:
         raise HTTPException(status_code=404, detail="Subject not found")
+    verify_subject_access(s, current_user)
     records = db.query(BaselineRecord).filter(
         BaselineRecord.subject_id == subject_id
     ).order_by(BaselineRecord.version.desc()).all()
@@ -55,10 +66,16 @@ def get_baselines(subject_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/api/v1/subjects/{subject_id}/compare-sessions")
-def compare_sessions(subject_id: str, payload: CompareSessionsRequest, db: Session = Depends(get_db)):
+def compare_sessions(
+    subject_id: str,
+    payload: CompareSessionsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     s = SubjectRepository(db).get(subject_id)
     if not s:
         raise HTTPException(status_code=404, detail="Subject not found")
+    verify_subject_access(s, current_user)
     s1 = SessionRepository(db).get(payload.session_id_1)
     s2 = SessionRepository(db).get(payload.session_id_2)
     if not s1 or not s2:

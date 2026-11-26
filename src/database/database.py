@@ -45,6 +45,17 @@ def init_db(db_url: str = None):
                 conn.commit()
             except Exception:
                 pass  # Column already exists — no action needed.
+        for tbl in ("users", "subjects"):
+            try:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN organization_id TEXT DEFAULT 'default_org'"))
+                conn.commit()
+            except Exception:
+                pass
+            try:
+                conn.execute(text(f"UPDATE {tbl} SET organization_id = 'default_org' WHERE organization_id IS NULL"))
+                conn.commit()
+            except Exception:
+                pass
 
     # Seed default demonstration accounts if no users exist
     from src.database.models import User

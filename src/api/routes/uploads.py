@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from src.api.dependencies import get_db, get_storage
+from src.api.auth.dependencies import get_current_user, verify_subject_access
 from src.api.schemas.api_responses import RecordingResponse
-from src.database.repositories import RecordingRepository, SessionRepository
+from src.database.models import User
+from src.database.repositories import RecordingRepository, SessionRepository, SubjectRepository
 from src.storage.file_storage import ALLOWED_EXTENSIONS
 from src.core.logging import get_logger
 from src.core.config import AppConfig
@@ -20,10 +22,15 @@ async def upload_recording(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     storage=Depends(get_storage),
+    current_user: User = Depends(get_current_user),
 ):
     sess = SessionRepository(db).get(session_id)
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found")
+    subj = SubjectRepository(db).get(sess.subject_id)
+    if not subj:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    verify_subject_access(subj, current_user)
 
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
@@ -62,18 +69,35 @@ async def upload_recording(
 
 
 @router.get("/api/v1/sessions/{session_id}/recordings", response_model=list[RecordingResponse])
-def list_recordings(session_id: str, db: Session = Depends(get_db)):
+def list_recordings(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     sess = SessionRepository(db).get(session_id)
     if not sess:
         raise HTTPException(status_code=404, detail="Session not found")
+    subj = SubjectRepository(db).get(sess.subject_id)
+    if not subj:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    verify_subject_access(subj, current_user)
     return RecordingRepository(db).list_for_session(session_id)
 
 
 @router.get("/api/v1/recordings/{recording_id}", response_model=RecordingResponse)
-def get_recording(recording_id: str, db: Session = Depends(get_db)):
+def get_recording(
+    recording_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     r = RecordingRepository(db).get(recording_id)
     if not r:
         raise HTTPException(status_code=404, detail="Recording not found")
+    sess = SessionRepository(db).get(r.session_id)
+    if sess:
+        subj = SubjectRepository(db).get(sess.subject_id)
+        if subj:
+            verify_subject_access(subj, current_user)
     return r
 
 
@@ -81,7 +105,11 @@ def get_recording(recording_id: str, db: Session = Depends(get_db)):
     "/api/v1/recordings/{recording_id}/annotated-video",
     summary="Stream annotated video (MP4)",
 )
-def get_annotated_video(recording_id: str, db: Session = Depends(get_db)):
+def get_annotated_video(
+    recording_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Stream the annotated MP4 for a completed recording.
 
     - 404: recording not found, or file missing despite completed status.
@@ -93,6 +121,11 @@ def get_annotated_video(recording_id: str, db: Session = Depends(get_db)):
     r = RecordingRepository(db).get(recording_id)
     if not r:
         raise HTTPException(status_code=404, detail="Recording not found")
+    sess = SessionRepository(db).get(r.session_id)
+    if sess:
+        subj = SubjectRepository(db).get(sess.subject_id)
+        if subj:
+            verify_subject_access(subj, current_user)
 
     if r.annotation_status != "completed":
         raise HTTPException(
@@ -125,8 +158,9 @@ def get_annotated_video(recording_id: str, db: Session = Depends(get_db)):
             detail="Annotated video file not found on disk",
         )
 
+    dl_name = ann_path.name if ann_path.name.lower().endswith(".mp4") else f"annotated_{recording_id}.mp4"
     return _FR(
         path=str(ann_path),
         media_type="video/mp4",
-        filename=ann_path.name,
+        filename=dl_name,
     )

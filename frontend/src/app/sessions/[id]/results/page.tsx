@@ -4,6 +4,8 @@ import React, { useEffect, useState, use } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { assessmentsApi, recordingsApi, sessionsApi } from '@/lib/api'
+import api from '@/lib/api-client'
+import { useAuth } from '@/context/AuthContext'
 import { useLanguage } from '@/context/LanguageContext'
 import type { Assessment, Session, Recording, FeatureInterpretation } from '@/types/api'
 import {
@@ -33,7 +35,9 @@ export default function SessionResultsPage({
   const searchParams = useSearchParams()
   const recordingId = searchParams.get('recording_id') || ''
 
+  const { user } = useAuth()
   const { t, locale } = useLanguage()
+  const isClinician = user?.role === 'professional' || user?.role === 'administrator'
 
   const [assessment, setAssessment] = useState<Assessment | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -45,6 +49,11 @@ export default function SessionResultsPage({
   // Audience view mode: 'patient' vs 'professional'
   const [viewMode, setViewMode] = useState<'patient' | 'professional'>('patient')
   const [expandedFeatures, setExpandedFeatures] = useState<Record<string, boolean>>({})
+
+  // Authenticated Video Stream State
+  const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null)
+  const [videoLoading, setVideoLoading] = useState(false)
+  const [videoError, setVideoError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -73,7 +82,89 @@ export default function SessionResultsPage({
   }
 
   const activeRec = recordings.find((r) => r.id === activeRecordingId)
-  const annotatedVideoUrl = activeRecordingId ? recordingsApi.annotatedVideoUrl(activeRecordingId) : ''
+
+  useEffect(() => {
+    let isCancelled = false
+    let currentBlobUrl: string | null = null
+
+    if (!activeRecordingId || activeRec?.annotation_status !== 'completed') {
+      setVideoBlobUrl(null)
+      setVideoLoading(false)
+      setVideoError(null)
+      return
+    }
+
+    setVideoLoading(true)
+    setVideoError(null)
+
+    api
+      .get(`/api/v1/recordings/${activeRecordingId}/annotated-video`, {
+        responseType: 'blob',
+      })
+      .then((res) => {
+        if (isCancelled) return
+        const contentType = res.headers['content-type'] || res.data?.type || ''
+        if (contentType.includes('text/html') || contentType.includes('application/json')) {
+          setVideoError(locale === 'vi' ? 'Không thể phát video.' : 'Failed to load video.')
+          setVideoLoading(false)
+          return
+        }
+        const blob = new Blob([res.data], { type: 'video/mp4' })
+        currentBlobUrl = window.URL.createObjectURL(blob)
+        setVideoBlobUrl(currentBlobUrl)
+        setVideoLoading(false)
+      })
+      .catch((err) => {
+        if (isCancelled) return
+        setVideoLoading(false)
+        if (err.response?.status === 403) {
+          setVideoError(locale === 'vi' ? 'Không có quyền truy cập video này.' : 'Unauthorized to view this video.')
+        } else if (err.response?.status === 404) {
+          setVideoError(locale === 'vi' ? 'Không tìm thấy video đã phân tích.' : 'Annotated video not found.')
+        } else {
+          setVideoError(locale === 'vi' ? 'Lỗi khi tải video.' : 'Error loading video.')
+        }
+      })
+
+    return () => {
+      isCancelled = true
+      if (currentBlobUrl) {
+        window.URL.revokeObjectURL(currentBlobUrl)
+      }
+    }
+  }, [activeRecordingId, activeRec?.annotation_status, locale])
+
+  const handleDownloadMp4 = async () => {
+    if (!activeRecordingId) return
+    try {
+      let downloadUrl = videoBlobUrl
+      let shouldRevoke = false
+      if (!downloadUrl) {
+        const res = await api.get(`/api/v1/recordings/${activeRecordingId}/annotated-video`, {
+          responseType: 'blob',
+        })
+        const contentType = res.headers['content-type'] || res.data?.type || ''
+        if (contentType.includes('text/html') || contentType.includes('application/json')) {
+          setError(locale === 'vi' ? 'Không thể tải video MP4.' : 'Failed to download MP4 video.')
+          return
+        }
+        const blob = new Blob([res.data], { type: 'video/mp4' })
+        downloadUrl = window.URL.createObjectURL(blob)
+        shouldRevoke = true
+      }
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = `annotated_${activeRecordingId}.mp4`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      if (shouldRevoke && downloadUrl) {
+        window.URL.revokeObjectURL(downloadUrl)
+      }
+    } catch {
+      setError(locale === 'vi' ? 'Không thể tải video MP4.' : 'Failed to download MP4 video.')
+    }
+  }
 
   if (loading) {
     return (
@@ -166,29 +257,31 @@ export default function SessionResultsPage({
           </div>
         </div>
 
-        {/* Audience Mode Switcher */}
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl self-start sm:self-auto border border-slate-200">
-          <button
-            onClick={() => setViewMode('patient')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-              viewMode === 'patient'
-                ? 'bg-white text-teal-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            {locale === 'vi' ? 'Dành cho Bệnh nhân' : 'Patient View'}
-          </button>
-          <button
-            onClick={() => setViewMode('professional')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-              viewMode === 'professional'
-                ? 'bg-white text-teal-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            {locale === 'vi' ? 'Chuyên gia / Lâm sàng' : 'Clinician View'}
-          </button>
-        </div>
+        {/* Audience Mode Switcher (Clinicians/Admins only) */}
+        {isClinician && (
+          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl self-start sm:self-auto border border-slate-200">
+            <button
+              onClick={() => setViewMode('patient')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                viewMode === 'patient'
+                  ? 'bg-white text-teal-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {locale === 'vi' ? 'Dành cho Bệnh nhân' : 'Patient View'}
+            </button>
+            <button
+              onClick={() => setViewMode('professional')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                viewMode === 'professional'
+                  ? 'bg-white text-teal-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {locale === 'vi' ? 'Chuyên gia / Lâm sàng' : 'Clinician View'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Grid: Video Player + Key Summary */}
@@ -208,12 +301,22 @@ export default function SessionResultsPage({
 
             {/* Video Player Container */}
             <div className="bg-black aspect-video relative flex items-center justify-center">
-              {activeRecordingId ? (
+              {videoLoading ? (
+                <div className="p-8 text-center text-slate-300 space-y-2">
+                  <div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-xs">{locale === 'vi' ? 'Đang tải video...' : 'Loading video...'}</p>
+                </div>
+              ) : videoError ? (
+                <div className="p-8 text-center text-rose-300 space-y-2">
+                  <AlertCircle className="w-6 h-6 mx-auto text-rose-400" />
+                  <p className="text-xs">{videoError}</p>
+                </div>
+              ) : videoBlobUrl ? (
                 <video
                   controls
                   playsInline
                   className="w-full h-full object-contain"
-                  src={annotatedVideoUrl}
+                  src={videoBlobUrl}
                 >
                   <p className="text-white text-xs p-4">
                     {t('results.noAnnotation')}
@@ -236,14 +339,15 @@ export default function SessionResultsPage({
                     : locale === 'vi' ? 'Đang chờ xử lý video' : 'Video processing...'}
                 </span>
               </div>
-              <a
-                href={annotatedVideoUrl}
-                download
-                className="text-teal-700 font-semibold hover:underline flex items-center gap-1 text-[11px]"
+              <button
+                type="button"
+                onClick={handleDownloadMp4}
+                disabled={!activeRecordingId || activeRec?.annotation_status !== 'completed'}
+                className="text-teal-700 font-semibold hover:underline flex items-center gap-1 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>{locale === 'vi' ? 'Tải video MP4' : 'Download MP4'}</span>
-              </a>
+              </button>
             </div>
           </div>
 

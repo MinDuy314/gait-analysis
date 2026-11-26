@@ -28,6 +28,22 @@ def client():
         storage = FileStorage(storage_root=Path(tmpdir) / "uploads")
         test_jm = JobManager(db_session_factory=SL, max_workers=2)
 
+        with SL() as db:
+            import uuid
+            from src.database import models
+            from src.api.auth.security import hash_password, create_access_token
+            u = models.User(
+                id=str(uuid.uuid4()),
+                username="test_clinician_integ",
+                hashed_password=hash_password("Pass@123"),
+                role="professional",
+                organization_id="default_org",
+                is_active=True,
+            )
+            db.add(u)
+            db.commit()
+            token = create_access_token(data={"sub": u.id, "role": u.role})
+
         def override_db():
             db = SL()
             try:
@@ -40,6 +56,7 @@ def client():
         app.dependency_overrides[get_job_manager] = lambda: test_jm
 
         with TestClient(app) as c:
+            c.headers["Authorization"] = f"Bearer {token}"
             yield c
 
         test_jm.wait_all(timeout=5.0)
