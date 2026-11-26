@@ -64,9 +64,61 @@ def compare_sessions(subject_id: str, payload: CompareSessionsRequest, db: Sessi
     if not s1 or not s2:
         raise HTTPException(status_code=404, detail="One or both sessions not found")
 
+    a1 = db.query(AssessmentRecord).filter(
+        AssessmentRecord.session_id == payload.session_id_1
+    ).order_by(AssessmentRecord.created_at.desc()).first()
+    a2 = db.query(AssessmentRecord).filter(
+        AssessmentRecord.session_id == payload.session_id_2
+    ).order_by(AssessmentRecord.created_at.desc()).first()
+
+    comparability_limitations = []
+    if s1.camera_view != s2.camera_view:
+        comparability_limitations.append(
+            f"Camera view mismatch ({s1.camera_view or 'unknown'} vs {s2.camera_view or 'unknown'}) — direct comparison is limited."
+        )
+    if not a1 or not a2:
+        comparability_limitations.append("One or both sessions lack a completed assessment.")
+
+    comparability = "comparable"
+    if not a1 or not a2:
+        comparability = "insufficient_data"
+    elif s1.camera_view != s2.camera_view:
+        comparability = "conditionally_comparable"
+
+    measurement_changes = []
+    if a1 and a2 and a1.assessment_data and a2.assessment_data:
+        interps1 = {
+            f["feature_name"]: f
+            for f in (a1.assessment_data.get("feature_interpretations") or [])
+            if f.get("value") is not None
+        }
+        interps2 = {
+            f["feature_name"]: f
+            for f in (a2.assessment_data.get("feature_interpretations") or [])
+            if f.get("value") is not None
+        }
+        for fname, f1 in interps1.items():
+            if fname in interps2:
+                f2 = interps2[fname]
+                v1 = float(f1["value"])
+                v2 = float(f2["value"])
+                delta = round(v2 - v1, 3)
+                pct = round(((v2 - v1) / v1) * 100.0, 2) if v1 != 0 else None
+                measurement_changes.append({
+                    "feature_name": fname,
+                    "category": f2.get("category") or f1.get("category"),
+                    "unit": f2.get("unit") or f1.get("unit") or "",
+                    "session_1_value": v1,
+                    "session_2_value": v2,
+                    "delta": delta,
+                    "percent_change": pct,
+                })
+
     return {
         "subject_id": subject_id,
         "session_1": payload.session_id_1,
         "session_2": payload.session_id_2,
-        "comparability": "comparable" if s1.camera_view == s2.camera_view else "conditionally_comparable",
+        "comparability": comparability,
+        "comparability_limitations": comparability_limitations,
+        "measurement_changes": measurement_changes,
     }

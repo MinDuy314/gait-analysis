@@ -68,7 +68,8 @@ export interface Job {
 
 export interface FeatureInterpretation {
   feature_name: string
-  value?: number
+  category?: string
+  value?: number | null
   unit: string
   status: 'supported' | 'limited_evidence' | 'insufficient_data' | 'not_assessable'
   rule_name?: string
@@ -84,6 +85,7 @@ export interface Assessment {
   overall_status: string
   data: {
     feature_interpretations: FeatureInterpretation[]
+    grouped_measurements?: Record<string, FeatureInterpretation[]>
     reference_comparisons?: unknown[]
     bilateral_results?: unknown[]
     global_limitations?: string[]

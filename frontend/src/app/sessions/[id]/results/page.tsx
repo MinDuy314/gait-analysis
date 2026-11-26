@@ -86,6 +86,32 @@ export default function SessionResultsPage({
 
   const features: FeatureInterpretation[] = assessment?.data?.feature_interpretations || []
 
+  const GAIT_CATEGORIES: { key: string; en: string; vi: string }[] = [
+    { key: 'temporal', en: 'Temporal Gait Parameters', vi: 'Thông số Thời gian (Temporal)' },
+    { key: 'spatial', en: 'Spatial Gait Parameters', vi: 'Thông số Không gian (Spatial)' },
+    { key: 'kinematic', en: 'Joint Kinematics (ROM)', vi: 'Động học Khớp (Kinematic)' },
+    { key: 'symmetry', en: 'Bilateral Symmetry', vi: 'Đối xứng Hai bên (Symmetry)' },
+    { key: 'postural', en: 'Postural Control', vi: 'Kiểm soát Tư thế (Postural)' },
+  ]
+
+  const inferCategory = (name: string): string => {
+    const n = name.toLowerCase()
+    if (n.includes('cadence') || n.includes('step_time') || n.includes('stride_time') || n.includes('stance') || n.includes('swing')) return 'temporal'
+    if (n.includes('step_length') || n.includes('stride_length') || n.includes('speed')) return 'spatial'
+    if (n.includes('symmetry') || n.includes('asymmetry') || n.includes('bilateral')) return 'symmetry'
+    if (n.includes('trunk') || n.includes('pelvi') || n.includes('lean') || n.includes('tilt')) return 'postural'
+    return 'kinematic'
+  }
+
+  const grouped: Record<string, FeatureInterpretation[]> = assessment?.data?.grouped_measurements
+    ? assessment.data.grouped_measurements
+    : features.reduce((acc, f) => {
+        const cat = f.category || inferCategory(f.feature_name)
+        if (!acc[cat]) acc[cat] = []
+        acc[cat].push(f)
+        return acc
+      }, {} as Record<string, FeatureInterpretation[]>)
+
   const statusBadge = (st: string) => {
     switch (st) {
       case 'supported':
@@ -283,9 +309,17 @@ export default function SessionResultsPage({
                   : 'No gait metrics currently computed for this session.'}
               </div>
             ) : (
-              features.map((feat) => {
-                const isExpanded = !!expandedFeatures[feat.feature_name]
-                const hasValue = feat.value !== null && feat.value !== undefined
+              GAIT_CATEGORIES.map((cat) => {
+                const catFeatures = grouped[cat.key] || []
+                if (catFeatures.length === 0) return null
+                return (
+                  <div key={cat.key} className="space-y-2.5 pt-2">
+                    <div className="text-xs font-bold text-teal-800 uppercase tracking-wider px-1">
+                      {locale === 'vi' ? cat.vi : cat.en}
+                    </div>
+                    {catFeatures.map((feat) => {
+                      const isExpanded = !!expandedFeatures[feat.feature_name]
+                      const hasValue = feat.value !== null && feat.value !== undefined
 
                 return (
                   <div
@@ -357,9 +391,12 @@ export default function SessionResultsPage({
                         )}
                       </div>
                     )}
-                  </div>
-                )
-              })
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })
             )}
           </div>
         </div>

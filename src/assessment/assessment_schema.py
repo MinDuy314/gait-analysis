@@ -19,6 +19,14 @@ class ComparabilityStatus(str, Enum):
     insufficient_data = "insufficient_data"
 
 
+class GaitCategory(str, Enum):
+    temporal = "temporal"
+    spatial = "spatial"
+    kinematic = "kinematic"
+    symmetry = "symmetry"
+    postural = "postural"
+
+
 class UncertaintySource(BaseModel):
     source: str
     description: str
@@ -27,6 +35,7 @@ class UncertaintySource(BaseModel):
 
 class FeatureInterpretation(BaseModel):
     feature_name: str
+    category: Optional[str] = None
     value: Optional[float] = None
     unit: str = ""
     status: AssessmentStatus
@@ -87,6 +96,7 @@ class GaitAssessment(BaseModel):
     context: AssessmentContext
     overall_status: AssessmentStatus
     feature_interpretations: List[FeatureInterpretation] = Field(default_factory=list)
+    grouped_measurements: Dict[str, List[FeatureInterpretation]] = Field(default_factory=dict)
     reference_comparisons: List[ReferenceComparison] = Field(default_factory=list)
     bilateral_results: List[BilateralResult] = Field(default_factory=list)
     unsupported_features: List[str] = Field(default_factory=list)

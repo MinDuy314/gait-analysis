@@ -2,13 +2,29 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from src.assessment.assessment_schema import (
-    AssessmentContext, AssessmentStatus, GaitAssessment,
+    AssessmentContext, AssessmentStatus, FeatureInterpretation, GaitAssessment, GaitCategory,
 )
 from src.assessment.biomechanical_rules import build_default_rules
 from src.assessment.reference_comparison import ReferenceComparisonEngine
 from src.assessment.bilateral_assessment import assess_bilateral_features
 from src.assessment.uncertainty_propagation import aggregate_uncertainty
 from src.core.config import AppConfig
+
+
+def categorize_gait_feature(feature_name: str) -> str:
+    """Map a gait feature name into one of the five rehabilitation domains."""
+    name = feature_name.lower()
+    if any(k in name for k in ("symmetry", "asymmetry", "bilateral", "left_right")):
+        return GaitCategory.symmetry.value
+    if any(k in name for k in ("cadence", "step_time", "stride_time", "stance", "swing", "double_support", "cycle_duration")):
+        return GaitCategory.temporal.value
+    if any(k in name for k in ("step_length", "stride_length", "walking_speed", "speed")):
+        return GaitCategory.spatial.value
+    if any(k in name for k in ("trunk", "pelvi", "lean", "tilt", "drop", "postur")):
+        return GaitCategory.postural.value
+    if any(k in name for k in ("hip", "knee", "ankle", "rom", "flexion", "extension", "dorsiflexion", "angle")):
+        return GaitCategory.kinematic.value
+    return GaitCategory.kinematic.value
 
 
 class AssessmentEngine:
@@ -47,11 +63,31 @@ class AssessmentEngine:
         )
 
         # Rule-based interpretations
-        interpretations = []
+        interpretations: List[FeatureInterpretation] = []
         for rule in self.rules:
             result = rule.evaluate(features, camera_view, confidences)
             if result is not None:
+                cat = categorize_gait_feature(result.feature_name)
+                result.category = cat
+                # Spatial metrics require camera calibration; never fabricate or return 0
+                if cat == GaitCategory.spatial.value and cal_status != "calibrated":
+                    result.value = None
+                    result.status = AssessmentStatus.not_assessable
+                    result.interpretation_text = (
+                        f"Spatial measurement '{result.feature_name}' is unavailable because the camera is uncalibrated."
+                    )
+                    if "Camera not calibrated — metric spatial measurements require calibration." not in result.limitations:
+                        result.limitations.append(
+                            "Camera not calibrated — metric spatial measurements require calibration."
+                        )
                 interpretations.append(result)
+
+        grouped_measurements: Dict[str, List[FeatureInterpretation]] = {
+            cat.value: [] for cat in GaitCategory
+        }
+        for interp in interpretations:
+            cat = interp.category or categorize_gait_feature(interp.feature_name)
+            grouped_measurements.setdefault(cat, []).append(interp)
 
         # Statistical reference comparisons
         ref_comparisons = []
@@ -103,6 +139,7 @@ class AssessmentEngine:
             context=context,
             overall_status=overall,
             feature_interpretations=interpretations,
+            grouped_measurements=grouped_measurements,
             reference_comparisons=ref_comparisons,
             bilateral_results=bilateral_results,
             unsupported_features=[],
