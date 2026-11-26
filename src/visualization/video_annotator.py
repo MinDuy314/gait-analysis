@@ -160,9 +160,16 @@ def annotate_video(
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(str(output_path), fourcc, out_fps, (width, height))
-        if not writer.isOpened():
+        # Attempt mp4v with fallback to avc1
+        writer = None
+        for code in ("mp4v", "avc1", "XVID"):
+            fourcc = cv2.VideoWriter_fourcc(*code)
+            w = cv2.VideoWriter(str(output_path), fourcc, out_fps, (width, height))
+            if w.isOpened():
+                writer = w
+                break
+
+        if writer is None or not writer.isOpened():
             raise VideoAnnotationError(
                 f"Cannot open VideoWriter for output: {output_path}"
             )

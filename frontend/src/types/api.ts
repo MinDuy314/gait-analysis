@@ -56,6 +56,7 @@ export interface Job {
   id: string
   session_id: string
   subject_id: string
+  recording_id?: string
   status: JobStatus
   current_stage?: string
   progress_pct: number

@@ -78,7 +78,12 @@ export const reportsApi = {
   generate: (session_id: string, report_type: 'individual' | 'professional') =>
     api.post<Report>(`/api/v1/sessions/${session_id}/reports`, { report_type }).then(r => r.data),
   get: (id: string) => api.get<Report>(`/api/v1/reports/${id}`).then(r => r.data),
-  downloadUrl: (id: string) => `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/v1/reports/${id}/download`,
+  download: (id: string, format: 'md' | 'html' = 'md') =>
+    api.get(`/api/v1/reports/${id}/download`, {
+      params: { format },
+      responseType: 'blob',
+    }),
+  downloadUrl: (id: string, format: 'md' | 'html' = 'md') => `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/api/v1/reports/${id}/download?format=${format}`,
 }
 
 // ─── Progress ─────────────────────────────────────────────────────────────

@@ -27,6 +27,7 @@ export default function SessionReportsPage({
 
   const [generatedReport, setGeneratedReport] = useState<Report | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isDownloading, setIsDownloading] = useState<'md' | 'html' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reportType, setReportType] = useState<'individual' | 'professional'>('individual')
 
@@ -44,7 +45,33 @@ export default function SessionReportsPage({
     }
   }
 
-  const downloadUrl = generatedReport ? reportsApi.downloadUrl(generatedReport.id) : ''
+  const handleDownload = async (format: 'md' | 'html') => {
+    if (!generatedReport) return
+    setIsDownloading(format)
+    setError(null)
+    try {
+      const res = await reportsApi.download(generatedReport.id, format)
+      const contentType = String(res.headers['content-type'] || '')
+      if (contentType.includes('application/json') || (contentType.includes('text/html') && format !== 'html')) {
+        setError(locale === 'vi' ? 'Không thể tải tệp báo cáo hợp lệ.' : 'Failed to download valid report file.')
+        return
+      }
+      const mime = format === 'html' ? 'text/html;charset=utf-8' : 'text/markdown;charset=utf-8'
+      const blob = new Blob([res.data], { type: mime })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${generatedReport.report_type}_report_${generatedReport.id}.${format}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || (locale === 'vi' ? 'Lỗi khi tải tệp báo cáo.' : 'Error downloading report file.'))
+    } finally {
+      setIsDownloading(null)
+    }
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -138,15 +165,25 @@ export default function SessionReportsPage({
               <div><strong>Generated At:</strong> {new Date(generatedReport.generated_at).toLocaleString()}</div>
             </div>
 
-            <div className="pt-2 flex justify-end">
-              <a
-                href={downloadUrl}
-                download
-                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs transition"
+            <div className="pt-2 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => handleDownload('md')}
+                disabled={isDownloading !== null}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-xs transition disabled:opacity-50"
               >
-                <Download className="w-4 h-4" />
-                <span>{locale === 'vi' ? 'Tải tệp Báo cáo (.md)' : 'Download Markdown Report'}</span>
-              </a>
+                <Download className={`w-4 h-4 ${isDownloading === 'md' ? 'animate-bounce' : ''}`} />
+                <span>{locale === 'vi' ? 'Tải tệp Markdown (.md)' : 'Download Markdown (.md)'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownload('html')}
+                disabled={isDownloading !== null}
+                className="flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs rounded-xl shadow-xs transition disabled:opacity-50"
+              >
+                <Download className={`w-4 h-4 ${isDownloading === 'html' ? 'animate-bounce' : ''}`} />
+                <span>{locale === 'vi' ? 'Tải trang web HTML (.html)' : 'Download Web Report (.html)'}</span>
+              </button>
             </div>
           </div>
         )}

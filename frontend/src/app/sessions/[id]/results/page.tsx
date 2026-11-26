@@ -73,7 +73,15 @@ export default function SessionResultsPage({
         if (j.status === 'completed') {
           assessmentsApi.get(sessionId).then((ass) => isMounted && ass && setAssessment(ass)).catch(() => null)
           recordingsApi.list(sessionId).then((res) => {
-            if (isMounted && res?.items) setRecordings(res.items)
+            if (isMounted && res?.items) {
+              setRecordings(res.items)
+              if (j.recording_id) {
+                setActiveRecordingId(j.recording_id)
+              } else {
+                const comp = res.items.find((r) => r.annotation_status === 'completed')
+                if (comp) setActiveRecordingId(comp.id)
+              }
+            }
           }).catch(() => null)
         }
         return j
@@ -165,7 +173,8 @@ export default function SessionResultsPage({
         if (recList?.items) {
           setRecordings(recList.items)
           if (!activeRecordingId && recList.items.length > 0) {
-            setActiveRecordingId(recList.items[0].id)
+            const comp = recList.items.find((r) => r.annotation_status === 'completed')
+            setActiveRecordingId(comp ? comp.id : recList.items[0].id)
           }
         }
       })

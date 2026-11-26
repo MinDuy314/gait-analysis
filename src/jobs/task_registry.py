@@ -234,8 +234,9 @@ def run_analysis_pipeline(
         partial_results["stages_completed"].append("generate_reports")
 
         # ------------------------------------------------------------------ #
-        # Optional annotation stage — failure does NOT fail the whole job.   #
-        # Reuses the exact poses from the single inference pass above.       #
+        # Annotation stage: if video recording was provided, annotated MP4   #
+        # must be successfully generated, verified, and persisted.           #
+        # If annotation fails, the job must NOT be marked fully completed.   #
         # ------------------------------------------------------------------ #
         if recording_path and recording_id:
             _annotate_recording(
@@ -245,6 +246,17 @@ def run_analysis_pipeline(
                 partial_results=partial_results,
                 poses=poses,
             )
+            if partial_results.get("annotation_status") != "completed":
+                err_msg = partial_results.get("annotation_error") or "Annotated video generation failed"
+                repo.update_status(
+                    job_id,
+                    "failed",
+                    stage="annotate_recording",
+                    error=f"Annotated video generation failed: {err_msg}",
+                    result=partial_results,
+                )
+                logger.warning("Job %s marked failed because annotation failed: %s", job_id, err_msg)
+                return
 
         # Stage 11: Finalize
         _update("finalize", pct=100.0)
@@ -295,7 +307,8 @@ def _annotate_recording(
 
     try:
         src_path = Path(recording_path)
-        out_path = src_path.parent / f"annotated_{src_path.name}"
+        # Ensure output is always an MP4 file
+        out_path = src_path.parent / f"annotated_{src_path.stem}.mp4"
 
         poses_to_use = poses if poses is not None else []
 
@@ -305,12 +318,17 @@ def _annotate_recording(
             output_path=out_path,
         )
 
+        if not annotated_path.exists() or annotated_path.stat().st_size == 0:
+            raise VideoAnnotationError(
+                f"Annotated video output is missing or empty at {annotated_path}"
+            )
+
         partial_results["annotation_status"] = "completed"
-        partial_results["annotated_video_path"] = str(annotated_path)
+        partial_results["annotated_video_path"] = str(annotated_path.resolve())
 
         rec_repo.update_annotation(
             recording_id=recording_id,
-            annotated_video_path=str(annotated_path),
+            annotated_video_path=str(annotated_path.resolve()),
             annotation_status="completed",
         )
         logger.info("Annotation completed for recording %s → %s", recording_id, annotated_path)

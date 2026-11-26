@@ -47,6 +47,7 @@ class JobResponse(BaseModel):
     id: str
     session_id: str
     subject_id: str
+    recording_id: Optional[str] = None
     status: str
     current_stage: Optional[str] = None
     progress_pct: float = 0.0
