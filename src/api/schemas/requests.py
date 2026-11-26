@@ -31,6 +31,24 @@ class AnalysisRequest(BaseModel):
 
 class ReportRequest(BaseModel):
     report_type: str = "individual"  # "individual" or "professional"
+    title: Optional[str] = None
+    clinician_notes: Optional[str] = None
+    rehabilitation_priorities: Optional[list[str]] = None
+    recommendations: Optional[str] = None
+
+
+class ReportUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    clinician_notes: Optional[str] = None
+    rehabilitation_priorities: Optional[list[str]] = None
+    recommendations: Optional[str] = None
+    status: Optional[str] = None  # "draft" or "pending_review"
+
+
+class AssessmentUpdateRequest(BaseModel):
+    clinical_interpretation: Optional[str] = None
+    clinical_notes: Optional[str] = None
+    approval_status: Optional[str] = None  # "pending_review" or "approved"
 
 
 class CompareSessionsRequest(BaseModel):

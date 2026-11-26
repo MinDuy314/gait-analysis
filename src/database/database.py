@@ -34,23 +34,42 @@ def init_db(db_url: str = None):
 
     # Safe migration: add new columns if they don't already exist (SQLite only).
     from sqlalchemy import text
-    _new_cols = [
-        "annotated_video_path TEXT",
-        "annotation_status TEXT DEFAULT 'pending'",
+    _migrations = [
+        ("recordings", "annotated_video_path TEXT"),
+        ("recordings", "annotation_status TEXT DEFAULT 'pending'"),
+        ("recordings", "quality_status TEXT"),
+        ("recordings", "measurement_confidence REAL"),
+        ("recordings", "analysis_warnings TEXT"),
+        ("sessions", "session_status TEXT DEFAULT 'active'"),
+        ("sessions", "summary TEXT"),
+        ("analysis_jobs", "processed_frames INTEGER DEFAULT 0"),
+        ("analysis_jobs", "total_frames INTEGER DEFAULT 0"),
+        ("assessments", "recording_id TEXT"),
+        ("assessments", "clinician_id TEXT"),
+        ("assessments", "clinical_interpretation TEXT"),
+        ("assessments", "clinical_notes TEXT"),
+        ("assessments", "approval_status TEXT DEFAULT 'pending_review'"),
+        ("assessments", "approved_by TEXT"),
+        ("assessments", "approved_at DATETIME"),
+        ("assessments", "updated_at DATETIME"),
+        ("reports", "title TEXT"),
+        ("reports", "clinician_notes TEXT"),
+        ("reports", "rehabilitation_priorities TEXT"),
+        ("reports", "recommendations TEXT"),
+        ("reports", "report_data TEXT"),
+        ("reports", "approved_by TEXT"),
+        ("reports", "approved_at DATETIME"),
+        ("reports", "published_at DATETIME"),
+        ("reports", "revision_history TEXT"),
+        ("reports", "updated_at DATETIME"),
     ]
     with engine.connect() as conn:
-        for col_def in _new_cols:
+        for tbl_name, col_def in _migrations:
             try:
-                conn.execute(text(f"ALTER TABLE recordings ADD COLUMN {col_def}"))
+                conn.execute(text(f"ALTER TABLE {tbl_name} ADD COLUMN {col_def}"))
                 conn.commit()
             except Exception:
                 pass  # Column already exists — no action needed.
-        for col_def in ("processed_frames INTEGER DEFAULT 0", "total_frames INTEGER DEFAULT 0"):
-            try:
-                conn.execute(text(f"ALTER TABLE analysis_jobs ADD COLUMN {col_def}"))
-                conn.commit()
-            except Exception:
-                pass
         for tbl in ("users", "subjects"):
             try:
                 conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN organization_id TEXT DEFAULT 'default_org'"))

@@ -229,18 +229,52 @@ def run_analysis_pipeline(
         partial_results["assessment"] = assessment.model_dump(mode="json")
         partial_results["stages_completed"].append("assess")
 
-        # Persist assessment record with json serializable data
-        rec = AssessmentRecord(
-            subject_id=subject_id,
-            session_id=session_id,
-            job_id=job_id,
-            assessment_data=assessment.model_dump(mode="json"),
-            overall_status=assessment.overall_status.value,
-            pose_model=pose_model,
-            rule_version=ctx.assessment_rule_version,
-            created_at=datetime.utcnow(),
-        )
-        db.add(rec)
+        # Persist assessment record with json serializable data (update if reassessing same recording)
+        existing_ass = None
+        if recording_id:
+            existing_ass = db.query(AssessmentRecord).filter(
+                AssessmentRecord.session_id == session_id,
+                AssessmentRecord.recording_id == recording_id,
+            ).first()
+        if existing_ass:
+            existing_ass.job_id = job_id
+            existing_ass.assessment_data = assessment.model_dump(mode="json")
+            existing_ass.overall_status = assessment.overall_status.value
+            existing_ass.pose_model = pose_model
+            existing_ass.rule_version = ctx.assessment_rule_version
+            existing_ass.updated_at = datetime.utcnow()
+        else:
+            rec = AssessmentRecord(
+                subject_id=subject_id,
+                session_id=session_id,
+                recording_id=recording_id,
+                job_id=job_id,
+                assessment_data=assessment.model_dump(mode="json"),
+                overall_status=assessment.overall_status.value,
+                pose_model=pose_model,
+                rule_version=ctx.assessment_rule_version,
+                created_at=datetime.utcnow(),
+            )
+            db.add(rec)
+
+        # Persist recording measurement quality & confidence
+        if recording_id:
+            rec_obj = rec_repo.get(recording_id)
+            if rec_obj:
+                confs = [
+                    float(f.confidence)
+                    for f in assessment.feature_interpretations
+                    if f.value is not None and f.confidence is not None
+                ]
+                avg_conf = round(sum(confs) / len(confs), 3) if confs else None
+                rec_obj.measurement_confidence = avg_conf
+                if assessment.overall_status.value == "supported" and (avg_conf is None or avg_conf >= 0.6):
+                    rec_obj.quality_status = "valid"
+                elif assessment.overall_status.value in ("limited_evidence", "supported"):
+                    rec_obj.quality_status = "low_confidence"
+                else:
+                    rec_obj.quality_status = "unavailable"
+                rec_obj.analysis_warnings = assessment.global_limitations[:5] if assessment.global_limitations else []
         db.commit()
 
         # Stage 10: Generate reports

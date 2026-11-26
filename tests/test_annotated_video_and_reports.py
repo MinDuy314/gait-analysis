@@ -280,16 +280,30 @@ def test_report_generation_persistence_and_downloads(fixture_setup):
     db.add(sess)
     db.commit()
 
-    # 1. Generate Individual Report as Patient
-    client.headers["Authorization"] = f"Bearer {patient_token}"
+    # 1. Clinician generates Individual Report (starts as draft)
+    client.headers["Authorization"] = f"Bearer {clinician_token}"
     ind_res = client.post(f"/api/v1/sessions/{sess.id}/reports", json={"report_type": "individual"})
     assert ind_res.status_code == 201
     ind_report_id = ind_res.json()["id"]
+    assert ind_res.json()["status"] == "draft"
+
+    # Patient cannot view or download unpublished draft report (403)
+    client.headers["Authorization"] = f"Bearer {patient_token}"
+    assert client.get(f"/api/v1/reports/{ind_report_id}").status_code == 403
+    assert client.get(f"/api/v1/reports/{ind_report_id}/download?format=md").status_code == 403
+
+    # Clinician publishes Individual Report so Patient can access it
+    client.headers["Authorization"] = f"Bearer {clinician_token}"
+    pub_res = client.post(f"/api/v1/reports/{ind_report_id}/publish")
+    assert pub_res.status_code == 200
+    assert pub_res.json()["status"] == "published"
+    client.headers["Authorization"] = f"Bearer {patient_token}"
 
     # Verify Report Record in DB
+    db.expire_all()
     report_record = db.query(ReportRecord).filter(ReportRecord.id == ind_report_id).first()
     assert report_record is not None
-    assert report_record.status == "generated"
+    assert report_record.status == "published"
     assert report_record.file_path is not None
     assert Path(report_record.file_path).exists()
     assert Path(report_record.file_path).stat().st_size > 0

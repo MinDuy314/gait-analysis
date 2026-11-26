@@ -27,6 +27,9 @@ class SessionResponse(BaseModel):
     walking_surface: Optional[str] = None
     height_m: Optional[float] = None
     mass_kg: Optional[float] = None
+    session_status: Optional[str] = "active"
+    summary: Optional[str] = None
+    notes: Optional[str] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -39,6 +42,9 @@ class RecordingResponse(BaseModel):
     validation_status: str
     annotated_video_path: Optional[str] = None
     annotation_status: Optional[str] = None
+    quality_status: Optional[str] = None
+    measurement_confidence: Optional[float] = None
+    analysis_warnings: Optional[List[str]] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -64,8 +70,19 @@ class JobResponse(BaseModel):
 class ReportResponse(BaseModel):
     id: str
     report_type: str
+    title: Optional[str] = None
     subject_id: str
     session_id: str
+    assessment_id: Optional[str] = None
     status: str
+    clinician_notes: Optional[str] = None
+    rehabilitation_priorities: Optional[List[str]] = None
+    recommendations: Optional[str] = None
+    report_data: Optional[dict] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    revision_history: Optional[List[dict]] = None
     generated_at: datetime
+    updated_at: Optional[datetime] = None
     model_config = {"from_attributes": True}

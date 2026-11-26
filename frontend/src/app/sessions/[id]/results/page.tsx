@@ -587,7 +587,7 @@ export default function SessionResultsPage({
             </Link>
 
             <Link
-              href={`/progress`}
+              href={session ? `/progress?subject_id=${session.subject_id}` : '/progress'}
               className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-teal-500 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition"
             >
               <TrendingUp className="w-4 h-4 text-teal-600" />

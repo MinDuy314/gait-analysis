@@ -6,8 +6,22 @@ from src.api.schemas.requests import CompareSessionsRequest
 from src.database.models import BaselineRecord, ProgressRecord, AssessmentRecord, User
 from src.database.repositories import SubjectRepository, SessionRepository
 from src.progress.progress_engine import ProgressEngine
+from src.progress.longitudinal_service import build_longitudinal_progress
 
 router = APIRouter(tags=["progress"])
+
+
+@router.get("/api/v1/subjects/{subject_id}/longitudinal")
+def get_longitudinal_progress(
+    subject_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    s = SubjectRepository(db).get(subject_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    verify_subject_access(s, current_user)
+    return build_longitudinal_progress(db, subject_id)
 
 
 @router.get("/api/v1/subjects/{subject_id}/progress")

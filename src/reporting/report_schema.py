@@ -24,6 +24,7 @@ class GaitReport(BaseModel):
     status: ReportStatus = ReportStatus.generated
     content_md: str = ""
     content_html: Optional[str] = None
+    report_data: Dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime = Field(default_factory=datetime.utcnow)
     limitations: List[str] = Field(default_factory=list)
     provenance: Dict[str, Any] = Field(default_factory=dict)

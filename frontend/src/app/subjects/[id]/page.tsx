@@ -93,13 +93,22 @@ export default function SubjectDetailPage({
           </div>
         </div>
 
-        <Link
-          href={`/subjects/${subject.id}/sessions/new`}
-          className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-xl shadow-xs transition"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{locale === 'vi' ? 'Thêm phiên đánh giá mới' : 'New Assessment Session'}</span>
-        </Link>
+        <div className="flex flex-wrap gap-2.5">
+          <Link
+            href={`/progress?subject_id=${subject.id}`}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:border-teal-500 text-slate-700 font-semibold text-xs rounded-xl shadow-xs transition"
+          >
+            <Activity className="w-4 h-4 text-teal-600" />
+            <span>{locale === 'vi' ? 'Xem Tiến độ Dài hạn' : 'Longitudinal Progress'}</span>
+          </Link>
+          <Link
+            href={`/subjects/${subject.id}/sessions/new`}
+            className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-xl shadow-xs transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{locale === 'vi' ? 'Thêm phiên đánh giá mới' : 'New Assessment Session'}</span>
+          </Link>
+        </div>
       </div>
 
       {/* Sessions History List */}

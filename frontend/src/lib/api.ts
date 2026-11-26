@@ -1,7 +1,7 @@
 import api from '@/lib/api-client'
 import type {
   TokenResponse, User, Subject, Session, Recording,
-  Job, Assessment, Report, Paginated, AnalysisRequest
+  Job, Assessment, Report, Paginated, AnalysisRequest, LongitudinalProgress
 } from '@/types/api'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -77,9 +77,23 @@ export const assessmentsApi = {
 
 // ─── Reports ──────────────────────────────────────────────────────────────
 export const reportsApi = {
-  generate: (session_id: string, report_type: 'individual' | 'professional') =>
-    api.post<Report>(`/api/v1/sessions/${session_id}/reports`, { report_type }).then(r => r.data),
+  list: (subject_id?: string) =>
+    api.get<Report[]>('/api/v1/reports', { params: subject_id ? { subject_id } : undefined }).then(r => r.data),
+  listForSession: (session_id: string) =>
+    api.get<Report[]>(`/api/v1/sessions/${session_id}/reports`).then(r => r.data),
+  generate: (
+    session_id: string,
+    report_type: 'individual' | 'professional',
+    extra?: { title?: string; clinician_notes?: string; rehabilitation_priorities?: string[]; recommendations?: string }
+  ) =>
+    api.post<Report>(`/api/v1/sessions/${session_id}/reports`, { report_type, ...extra }).then(r => r.data),
   get: (id: string) => api.get<Report>(`/api/v1/reports/${id}`).then(r => r.data),
+  update: (
+    id: string,
+    body: { title?: string; clinician_notes?: string; rehabilitation_priorities?: string[]; recommendations?: string; status?: 'draft' | 'pending_review' }
+  ) => api.patch<Report>(`/api/v1/reports/${id}`, body).then(r => r.data),
+  approve: (id: string) => api.post<Report>(`/api/v1/reports/${id}/approve`).then(r => r.data),
+  publish: (id: string) => api.post<Report>(`/api/v1/reports/${id}/publish`).then(r => r.data),
   download: (id: string, format: 'md' | 'html' = 'md') =>
     api.get(`/api/v1/reports/${id}/download`, {
       params: { format },
@@ -90,6 +104,8 @@ export const reportsApi = {
 
 // ─── Progress ─────────────────────────────────────────────────────────────
 export const progressApi = {
-  get: (session_id: string) =>
-    api.get(`/api/v1/sessions/${session_id}/progress`).then(r => r.data),
+  get: (subject_id: string) =>
+    api.get(`/api/v1/subjects/${subject_id}/progress`).then(r => r.data),
+  longitudinal: (subject_id: string) =>
+    api.get<LongitudinalProgress>(`/api/v1/subjects/${subject_id}/longitudinal`).then(r => r.data),
 }
