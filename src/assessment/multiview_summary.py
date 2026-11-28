@@ -54,6 +54,9 @@ _SUBSTRING_VIEW_RULES: Sequence[tuple] = (
     ("ankle_angle", ("side",)),
     ("stride_length", ("side",)),
     ("step_length", ("side",)),
+    ("stance_", ("side",)),
+    ("swing_", ("side",)),
+    ("double_support", ("side",)),
     # Frontal-plane parameters: front or rear view.
     ("trunk_lateral", ("front", "rear")),
     ("step_width", ("front", "rear")),
@@ -159,6 +162,48 @@ def assessment_summary(record, labelled_view: Optional[str]) -> Optional[Dict[st
     }
 
 
+_GAIT_STATUS_MAP = {"estimated": "supported", "low_confidence": "limited_evidence", "unavailable": "insufficient_data"}
+# Gait-cycle metrics merged into the combined table. Cadence and cycle duration are
+# omitted here because the assessment already reports them (cadence from the same
+# step-based source when well supported).
+_GAIT_COMBINED_METRICS = (
+    "stance_time", "swing_time", "stance_pct", "swing_pct",
+    "double_support_time", "double_support_pct",
+    "stance_time_asymmetry", "swing_time_asymmetry", "stance_pct_asymmetry",
+)
+
+
+def gait_cycle_measurements(record) -> List[Dict[str, Any]]:
+    """Convert a stored gait-cycle analysis into combinable per-view measurements."""
+    if record is None:
+        return []
+    data = record.analysis_data or {}
+    if data.get("status") != "analysed":
+        return []
+    valid = [c for c in data.get("cycles") or [] if c.get("included_in_aggregate")]
+    confs = [c["min_event_confidence"] for c in valid if c.get("min_event_confidence") is not None]
+    confidence = round(sum(confs) / len(confs), 3) if confs else 0.0
+    out = []
+    for m in data.get("phase_metrics") or []:
+        if m.get("name") not in _GAIT_COMBINED_METRICS:
+            continue
+        name = f"{m['side']}_{m['name']}" if m.get("side") else m["name"]
+        out.append({
+            "feature_name": name,
+            "category": "gait_cycle",
+            "value": m.get("value"),
+            "unit": m.get("unit") or "",
+            "status": _GAIT_STATUS_MAP.get(m.get("status"), "insufficient_data"),
+            "confidence": confidence if m.get("value") is not None else 0.0,
+            # Gait-cycle analysis already follows the labelled view; a detector
+            # disagreement is reported in its own warnings instead.
+            "view_mismatch": data.get("view_source") != "labelled" and bool(
+                data.get("detected_view") not in (None, "unknown", data.get("camera_view"))
+            ),
+        })
+    return out
+
+
 def view_status(recording, job, assessment) -> str:
     """Status of a single view: missing / recorded / processing / analysed / failed."""
     if recording is None:
@@ -190,7 +235,7 @@ def combine_measurements(views: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "value": m.get("value"),
                 "status": m.get("status"),
                 "confidence": m.get("confidence"),
-                "view_mismatch": ass["view_mismatch"],
+                "view_mismatch": m.get("view_mismatch", ass["view_mismatch"]),
             }
             if m.get("unit"):
                 units[name] = m["unit"]
@@ -275,6 +320,7 @@ def build_multiview_summary(
     recordings: Iterable[Any],
     latest_job_for_recording,
     assessment_for_recording,
+    gait_cycle_for_recording=None,
 ) -> Dict[str, Any]:
     """Build the consolidated assessment payload for one session.
 
@@ -299,6 +345,9 @@ def build_multiview_summary(
         job = latest_job_for_recording(rec.id) if rec else None
         ass_record = assessment_for_recording(rec.id) if rec else None
         ass = assessment_summary(ass_record, cv)
+        gc_record = gait_cycle_for_recording(rec.id) if (rec and gait_cycle_for_recording) else None
+        if ass is not None:
+            ass["measurements"].extend(gait_cycle_measurements(gc_record))
         views.append({
             "camera_view": cv,
             "selected": cv in selected,
@@ -307,6 +356,7 @@ def build_multiview_summary(
             "retake_count": len([r for r in recordings if r.camera_view == cv and r.is_superseded]),
             "job": job_summary(job),
             "assessment": ass,
+            "gait_cycle_status": (gc_record.status if gc_record is not None else None),
         })
 
     unlabelled = [recording_summary(r) for r in active if r.camera_view not in CAMERA_VIEWS]

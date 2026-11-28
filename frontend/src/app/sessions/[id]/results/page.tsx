@@ -8,6 +8,7 @@ import api from '@/lib/api-client'
 import { useAuth } from '@/context/AuthContext'
 import { useLanguage } from '@/context/LanguageContext'
 import type { Assessment, Session, Recording, FeatureInterpretation, Job } from '@/types/api'
+import GaitCycleAnalysisSection from '@/components/gait/GaitCycleAnalysis'
 import {
   Video,
   Activity,
@@ -730,6 +731,11 @@ export default function SessionResultsPage({
           </div>
         </div>
       </div>
+
+      {/* Gait Cycle Analysis (Feature 02) – clinician view only */}
+      {isClinician && viewMode === 'professional' && activeRecordingId && (
+        <GaitCycleAnalysisSection key={activeRecordingId} recordingId={activeRecordingId} isVi={locale === 'vi'} />
+      )}
 
       {/* Scientific & Clinical Disclaimer Box */}
       <div className="p-5 bg-amber-50/70 border border-amber-200/80 rounded-2xl text-xs text-amber-900 space-y-2">

@@ -114,6 +114,7 @@ export interface MultiViewView {
     measurements: MultiViewMeasurement[]
     limitations: string[]
   } | null
+  gait_cycle_status?: 'analysed' | 'insufficient_data' | 'not_supported_view' | null
 }
 
 export interface CombinedMeasurement {
@@ -310,8 +311,95 @@ export interface Paginated<T> {
   limit: number
 }
 
+export type PoseModel = 'yolo' | 'mediapipe'
+
 export interface AnalysisRequest {
   recording_id?: string
   camera_view?: CameraView
-  pose_model: 'yolo'
+  pose_model: PoseModel
+}
+
+// ─── Gait-cycle analysis (Feature 02) ────────────────────────────────────
+export interface GaitCycleEvent {
+  event_type: 'initial_contact' | 'toe_off'
+  side: 'left' | 'right'
+  frame_index: number
+  timestamp_s: number
+  confidence: number
+  low_confidence: boolean
+  landmark: string
+}
+
+export interface GaitSubPhase {
+  name: string
+  start_pct: number | null
+  end_pct: number | null
+  duration_s: number | null
+  available: boolean
+  reason?: string | null
+}
+
+export interface GaitCycleRecord {
+  cycle_id: string
+  side: 'left' | 'right'
+  status: 'valid' | 'low_confidence' | 'incomplete' | 'implausible'
+  included_in_aggregate: boolean
+  reasons: string[]
+  start_s: number
+  end_s: number | null
+  duration_s: number | null
+  toe_off_s: number | null
+  stance_s: number | null
+  swing_s: number | null
+  stance_pct: number | null
+  swing_pct: number | null
+  double_support_s: number | null
+  double_support_pct: number | null
+  min_event_confidence: number | null
+  subphases: GaitSubPhase[]
+}
+
+export interface GaitMetricSummary {
+  name: string
+  unit: string
+  side: 'left' | 'right' | null
+  value: number | null
+  sd: number | null
+  n_cycles: number
+  status: 'estimated' | 'low_confidence' | 'unavailable'
+  measurement_type: string
+  note?: string | null
+}
+
+export interface GaitCycleAnalysisData {
+  method_version: string
+  method: string
+  status: 'analysed' | 'insufficient_data' | 'not_supported_view'
+  camera_view: string
+  walking_direction?: string | null
+  direction_source?: string | null
+  fps?: number | null
+  duration_s?: number | null
+  landmarks_used: Record<string, string>
+  events: GaitCycleEvent[]
+  cycles: GaitCycleRecord[]
+  phase_metrics: GaitMetricSummary[]
+  cadence: GaitMetricSummary | null
+  subphase_summary: Record<'left' | 'right', GaitSubPhase[]>
+  counts: Record<string, number>
+  warnings: string[]
+  thresholds: Record<string, number>
+}
+
+export interface GaitCycleAnalysisResponse {
+  id: string
+  session_id: string
+  recording_id: string | null
+  camera_view: string | null
+  recording_camera_view?: string | null
+  status: GaitCycleAnalysisData['status']
+  method_version: string
+  created_at: string
+  updated_at?: string | null
+  analysis: GaitCycleAnalysisData
 }

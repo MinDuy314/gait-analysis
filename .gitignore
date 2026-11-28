@@ -83,3 +83,6 @@ frontend/.next/
 frontend/out/
 frontend/.env.local
 !frontend/.env.local.example
+
+# MediaPipe pose model (download: see src/pose_estimation/mediapipe_estimator.py)
+models/mediapipe/*.task

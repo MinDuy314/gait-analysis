@@ -2,7 +2,7 @@ import api from '@/lib/api-client'
 import type {
   TokenResponse, User, Subject, Session, Recording,
   Job, Assessment, Report, Paginated, AnalysisRequest, LongitudinalProgress,
-  CameraView, RecordingUploadMetadata, MultiViewAssessment
+  CameraView, RecordingUploadMetadata, MultiViewAssessment, GaitCycleAnalysisResponse
 } from '@/types/api'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -90,6 +90,12 @@ export const assessmentsApi = {
     api.get<Assessment>(`/api/v1/sessions/${session_id}/assessment`, {
       params: recording_id ? { recording_id } : undefined,
     }).then(r => r.data),
+}
+
+// ─── Gait-cycle analysis ──────────────────────────────────────────────────
+export const gaitCyclesApi = {
+  getForRecording: (recording_id: string) =>
+    api.get<GaitCycleAnalysisResponse>(`/api/v1/recordings/${recording_id}/gait-cycles`).then(r => r.data),
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────

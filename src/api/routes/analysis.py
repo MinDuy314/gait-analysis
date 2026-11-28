@@ -57,6 +57,7 @@ def submit_analysis(
         session_id=session_id,
         subject_id=sess.subject_id,
         camera_view=camera_view,
+        labelled_view=payload.camera_view or recording_view,
         pose_model=payload.pose_model,
         recording_id=payload.recording_id,
     )

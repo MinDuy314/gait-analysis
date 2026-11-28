@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { sessionsApi, analysisApi, recordingsApi } from '@/lib/api'
 import { useLanguage } from '@/context/LanguageContext'
+import PoseModelSelect from '@/components/gait/PoseModelSelect'
+import type { PoseModel } from '@/types/api'
 import {
   Camera,
   Play,
@@ -30,6 +32,7 @@ export default function ConfirmViewPage({
   const { t, locale } = useLanguage()
 
   const [cameraView, setCameraView] = useState<'front' | 'side'>('front')
+  const [poseModel, setPoseModel] = useState<PoseModel>('yolo')
   const [resolvedRecId, setResolvedRecId] = useState<string>(recordingId)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,7 +69,7 @@ export default function ConfirmViewPage({
       const job = await analysisApi.submit(sessionId, {
         recording_id: targetRecId,
         camera_view: cameraView,
-        pose_model: 'yolo',
+        pose_model: poseModel,
       })
 
       // Redirect to progress polling page
@@ -190,6 +193,8 @@ export default function ConfirmViewPage({
             </div>
           </div>
         </div>
+
+        <PoseModelSelect value={poseModel} onChange={setPoseModel} isVi={locale === 'vi'} disabled={isSubmitting} />
 
         {/* Scientific Limitation Disclaimer */}
         <div className="p-4 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs text-amber-900 flex items-start gap-3">
