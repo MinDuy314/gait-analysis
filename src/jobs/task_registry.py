@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from src.core.logging import get_logger
 from src.database.repositories import JobRepository, RecordingRepository
-from src.database.models import AssessmentRecord
+from src.database.models import AssessmentRecord, GaitCycleAnalysisRecord
 
 logger = get_logger(__name__)
 
@@ -84,6 +84,7 @@ def run_analysis_pipeline(
 
     poses: List[Any] = []
     n_cycles: int = 0
+    gait_cycle_analysis = None
     effective_camera_view: str = camera_view
 
     try:
@@ -167,6 +168,9 @@ def run_analysis_pipeline(
             )
 
             poses = pipeline_result.poses
+            from src.gait_events.gait_cycle_analysis import GaitCycleAnalysis
+            _gca = getattr(pipeline_result, "gait_cycle_analysis", None)
+            gait_cycle_analysis = _gca if isinstance(_gca, GaitCycleAnalysis) else None
             n_cycles = len(pipeline_result.gait_cycles)
             if pipeline_result.camera_view.predicted_view != "unknown":
                 effective_camera_view = pipeline_result.camera_view.predicted_view
@@ -275,6 +279,15 @@ def run_analysis_pipeline(
                 else:
                     rec_obj.quality_status = "unavailable"
                 rec_obj.analysis_warnings = assessment.global_limitations[:5] if assessment.global_limitations else []
+
+        # Persist gait-cycle analysis linked to session + recording (Feature 02).
+        if gait_cycle_analysis is not None:
+            _persist_gait_cycle_analysis(db, gait_cycle_analysis, subject_id, session_id, recording_id, job_id)
+            partial_results["gait_cycle"] = {
+                "status": gait_cycle_analysis.status,
+                "cycles_valid": gait_cycle_analysis.counts.get("cycles_valid", 0),
+                "method_version": gait_cycle_analysis.method_version,
+            }
         db.commit()
 
         # Stage 10: Generate reports
@@ -343,6 +356,34 @@ def run_analysis_pipeline(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+def _persist_gait_cycle_analysis(db, analysis, subject_id, session_id, recording_id, job_id) -> None:
+    """Insert or update (re-analysis) the gait-cycle analysis for a recording. Caller commits."""
+    existing = None
+    if recording_id:
+        existing = db.query(GaitCycleAnalysisRecord).filter(
+            GaitCycleAnalysisRecord.session_id == session_id,
+            GaitCycleAnalysisRecord.recording_id == recording_id,
+        ).first()
+    data = analysis.model_dump(mode="json")
+    if existing:
+        existing.job_id = job_id
+        existing.camera_view = analysis.camera_view
+        existing.status = analysis.status
+        existing.method_version = analysis.method_version
+        existing.analysis_data = data
+        existing.updated_at = datetime.utcnow()
+    else:
+        db.add(GaitCycleAnalysisRecord(
+            subject_id=subject_id,
+            session_id=session_id,
+            recording_id=recording_id,
+            job_id=job_id,
+            camera_view=analysis.camera_view,
+            status=analysis.status,
+            method_version=analysis.method_version,
+            analysis_data=data,
+        ))
 
 def _annotate_recording(
     db,

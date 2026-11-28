@@ -143,6 +143,22 @@ class AssessmentRecord(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class GaitCycleAnalysisRecord(Base):
+    """Per-recording gait-cycle analysis (Feature 02). Estimated values from 2D video."""
+    __tablename__ = "gait_cycle_analyses"
+    id = Column(String, primary_key=True, default=_uuid)
+    subject_id = Column(String, nullable=False, index=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    recording_id = Column(String, ForeignKey("recordings.id"), nullable=True, index=True)
+    job_id = Column(String, ForeignKey("analysis_jobs.id"), nullable=True)
+    camera_view = Column(String, nullable=True)
+    status = Column(String, nullable=False)  # analysed | insufficient_data | not_supported_view
+    method_version = Column(String, nullable=False)
+    analysis_data = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class BaselineRecord(Base):
     __tablename__ = "baselines"
     id = Column(String, primary_key=True, default=_uuid)

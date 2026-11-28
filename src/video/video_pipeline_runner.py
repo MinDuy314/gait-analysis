@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from src.core.config import AppConfig
 from src.core.logging import get_logger
 from src.feature_extraction.video_feature_extractor import VideoGaitFeature, extract_video_features
+from src.gait_events.gait_cycle_analysis import GaitCycleAnalysis, analyze_gait_cycles
 from src.gait_events.gait_cycle_segmenter import GaitCycle, segment_gait_cycles
 from src.gait_events.gait_event_detector import GaitEvent, detect_gait_events_from_poses
 from src.pose_estimation.landmark_schema import FramePose
@@ -36,6 +37,7 @@ class VideoAnalysisResult(BaseModel):
     gait_events: List[GaitEvent] = Field(default_factory=list)
     gait_cycles: List[GaitCycle] = Field(default_factory=list)
     measurements: List[VideoGaitFeature] = Field(default_factory=list)
+    gait_cycle_analysis: Optional[GaitCycleAnalysis] = None
     limitations: List[str] = Field(default_factory=list)
 
 
@@ -112,6 +114,20 @@ def process_video_pipeline(
         camera_view=view_res.predicted_view,
     )
 
+    # 7. Gait-cycle phase analysis (Feature 02). Failures here must not break the pipeline.
+    try:
+        gait_cycle_analysis = analyze_gait_cycles(
+            poses=poses,
+            camera_view=view_res.predicted_view,
+            fps=meta.fps / frame_stride if meta.fps > 0 else None,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Gait-cycle analysis failed for %s: %s", path_obj.name, exc)
+        gait_cycle_analysis = GaitCycleAnalysis(
+            status="insufficient_data", camera_view=view_res.predicted_view,
+            warnings=[f"Gait-cycle analysis failed: {exc}"],
+        )
+
     limitations = [
         "Monocular video provides 2D image-plane estimates, NOT calibrated 3D laboratory motion capture.",
         "Angles represent planar projections and depend on camera perspective angle.",
@@ -132,6 +148,7 @@ def process_video_pipeline(
         gait_events=events,
         gait_cycles=cycles,
         measurements=features,
+        gait_cycle_analysis=gait_cycle_analysis,
         limitations=limitations,
     )
 
