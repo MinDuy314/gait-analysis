@@ -168,9 +168,20 @@ def run_analysis_pipeline(
             )
 
             poses = pipeline_result.poses
-            from src.gait_events.gait_cycle_analysis import GaitCycleAnalysis
+            from src.gait_events.gait_cycle_analysis import (
+                GaitCycleAnalysis, apply_labelled_view, cadence_for_assessment,
+            )
             _gca = getattr(pipeline_result, "gait_cycle_analysis", None)
             gait_cycle_analysis = _gca if isinstance(_gca, GaitCycleAnalysis) else None
+            if gait_cycle_analysis is not None:
+                # The view chosen at recording time takes precedence over the detector.
+                labelled_view = kwargs.get("labelled_view")
+                if not labelled_view and recording_id:
+                    _rec = rec_repo.get(recording_id)
+                    labelled_view = getattr(_rec, "camera_view", None)
+                gait_cycle_analysis = apply_labelled_view(
+                    gait_cycle_analysis, poses, labelled_view, gait_cycle_analysis.fps,
+                )
             n_cycles = len(pipeline_result.gait_cycles)
             if pipeline_result.camera_view.predicted_view != "unknown":
                 effective_camera_view = pipeline_result.camera_view.predicted_view
@@ -201,6 +212,18 @@ def run_analysis_pipeline(
                         if "knee_flexion_rom" not in extracted_features:
                             extracted_features["knee_flexion_rom"] = m.value
                             extracted_confidences["knee_flexion_rom"] = m.confidence
+
+            # Single cadence source: when the gait-cycle analysis has a well-supported
+            # step-based cadence, the assessment uses it; otherwise the legacy estimate stays.
+            step_cadence = cadence_for_assessment(gait_cycle_analysis)
+            if step_cadence is not None:
+                extracted_features["cadence"] = step_cadence[0]
+                extracted_features["cadence_steps_per_min"] = step_cadence[0]
+                extracted_confidences["cadence"] = step_cadence[1]
+                extracted_confidences["cadence_steps_per_min"] = step_cadence[1]
+                partial_results["cadence_source"] = "gait_cycle_step_based"
+            elif "cadence" in extracted_features:
+                partial_results["cadence_source"] = "legacy_cycle_frequency"
 
             partial_results["features"] = extracted_features
             partial_results["confidences"] = extracted_confidences

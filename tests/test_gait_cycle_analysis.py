@@ -325,3 +325,43 @@ def test_symmetry_index_reference_values():
     assert symmetry_index(0.6, 0.6) == 0.0
     assert symmetry_index(0.66, 0.6) == pytest.approx(9.52, abs=0.01)  # |0.06| / 0.63 * 100
     assert symmetry_index(None, 0.6) is None
+
+
+# --------------------------------------------------------------------------- #
+# Integration helpers: labelled view and cadence hand-off                     #
+# --------------------------------------------------------------------------- #
+
+from src.gait_events.gait_cycle_analysis import apply_labelled_view, cadence_for_assessment  # noqa: E402
+
+
+def test_labelled_side_view_overrides_detector():
+    poses = make_walker()
+    detected = analyze_gait_cycles(poses, "front", FPS)  # detector got it wrong
+    out = apply_labelled_view(detected, poses, "side", FPS)
+    assert out.status == "analysed" and out.camera_view == "side"
+    assert out.view_source == "labelled" and out.detected_view == "front"
+    assert any("automatic view detector suggested 'front'" in w for w in out.warnings)
+
+
+def test_labelled_view_matching_detector_has_no_warning():
+    poses = make_walker()
+    a = analyze_gait_cycles(poses, "side", FPS)
+    out = apply_labelled_view(a, poses, "side", FPS)
+    assert out is a and out.view_source == "labelled"
+    assert not any("view detector" in w for w in out.warnings)
+
+
+def test_unlabelled_recording_keeps_detector_view():
+    poses = make_walker()
+    a = analyze_gait_cycles(poses, "unknown", FPS)
+    out = apply_labelled_view(a, poses, None, FPS)
+    assert out.view_source == "detected" and out.camera_view == "unknown"
+
+
+def test_cadence_for_assessment_only_when_supported():
+    good = analyze_gait_cycles(make_walker(), "side", FPS)
+    value, conf = cadence_for_assessment(good)
+    assert value == pytest.approx(120.0 / T, abs=3.0) and 0.5 <= conf <= 1.0
+    assert cadence_for_assessment(analyze_gait_cycles(make_walker(conf=0.4), "side", FPS)) is None
+    assert cadence_for_assessment(analyze_gait_cycles(make_walker(), "front", FPS)) is None
+    assert cadence_for_assessment(None) is None

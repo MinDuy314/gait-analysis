@@ -148,7 +148,82 @@ def test_api_access_control_and_missing(env):
 
 def test_unsupported_view_stored_with_reason(env):
     SessionLocal, ids, as_user = env
+    with SessionLocal() as db:  # recording labelled as a front view
+        db.get(models.Recording, ids.recording_id).camera_view = "front"
+        db.commit()
     _run(SessionLocal, ids, analyze_gait_cycles(make_walker(), "front", FPS))
     body = as_user("gc_clin").get(f"/api/v1/recordings/{ids.recording_id}/gait-cycles").json()
     assert body["status"] == "not_supported_view"
     assert body["analysis"]["warnings"]
+
+
+def _run_with_poses(SessionLocal, ids, analysis, poses, **kwargs):
+    """Like _run, but the mocked pipeline also returns poses (needed for view re-analysis)."""
+    val = MagicMock(is_valid=True, issues=[])
+    val.metadata.fps, val.metadata.duration_seconds, val.metadata.width, val.metadata.height = 30.0, 6.0, 1280, 720
+    res = MagicMock()
+    res.poses, res.gait_cycles = poses, []
+    res.measurements = [MagicMock(feature_name="cadence", value=90.0, confidence=0.8, cycle_consistency_sd=None)]
+    res.camera_view.predicted_view = analysis.camera_view
+    res.gait_cycle_analysis = analysis
+
+    def fake_annotate(db, recording_path, recording_id, partial_results, poses):
+        partial_results["annotation_status"] = "completed"
+
+    with SessionLocal() as db:
+        job = models.AnalysisJob(session_id=ids.session_id, subject_id=ids.subject_id, recording_id=ids.recording_id)
+        db.add(job)
+        db.commit()
+        with patch("src.video.video_validator.validate_video", return_value=val), \
+             patch("src.video.video_pipeline_runner.process_video_pipeline", return_value=res), \
+             patch("src.jobs.task_registry._annotate_recording", side_effect=fake_annotate):
+            run_analysis_pipeline(job_id=job.id, db=db, recording_path=ids.path, session_id=ids.session_id,
+                                  subject_id=ids.subject_id, recording_id=ids.recording_id, **kwargs)
+        return job.id
+
+
+def test_recording_label_overrides_detected_view(env):
+    SessionLocal, ids, as_user = env
+    poses = make_walker()
+    # Detector says "front"; the recording (fixture) is labelled "side".
+    _run_with_poses(SessionLocal, ids, analyze_gait_cycles(poses, "front", FPS), poses)
+    body = as_user("gc_clin").get(f"/api/v1/recordings/{ids.recording_id}/gait-cycles").json()
+    assert body["status"] == "analysed" and body["camera_view"] == "side"
+    assert body["analysis"]["view_source"] == "labelled" and body["analysis"]["detected_view"] == "front"
+
+
+def test_assessment_uses_step_based_cadence(env):
+    SessionLocal, ids, as_user = env
+    poses = make_walker()
+    job_id = _run_with_poses(SessionLocal, ids, analyze_gait_cycles(poses, "side", FPS), poses)
+    with SessionLocal() as db:
+        job = db.get(models.AnalysisJob, job_id)
+        assert job.result_data["cadence_source"] == "gait_cycle_step_based"
+        cad = job.result_data["features"]["cadence_steps_per_min"]
+        assert cad == pytest.approx(120.0 / 1.1, abs=3.0)  # not the legacy 90.0
+        assert job.result_data["features"]["cadence"] == cad
+
+
+def test_assessment_keeps_legacy_cadence_when_unsupported(env):
+    SessionLocal, ids, as_user = env
+    poses = make_walker(conf=0.4)  # all events low confidence
+    job_id = _run_with_poses(SessionLocal, ids, analyze_gait_cycles(poses, "side", FPS), poses)
+    with SessionLocal() as db:
+        job = db.get(models.AnalysisJob, job_id)
+        assert job.result_data["cadence_source"] == "legacy_cycle_frequency"
+        assert job.result_data["features"]["cadence"] == 90.0
+
+
+def test_gait_cycle_metrics_in_multiview_combined(env):
+    SessionLocal, ids, as_user = env
+    poses = make_walker(stance_frac=(0.63, 0.57))
+    _run_with_poses(SessionLocal, ids, analyze_gait_cycles(poses, "side", FPS), poses)
+    mv = as_user("gc_clin").get(f"/api/v1/sessions/{ids.session_id}/multiview").json()
+    side = next(v for v in mv["views"] if v["camera_view"] == "side")
+    assert side["gait_cycle_status"] == "analysed"
+    combined = {m["feature_name"]: m for m in mv["combined"]["measurements"]}
+    for name, expected in (("left_stance_pct", 63.0), ("right_stance_pct", 57.0)):
+        m = combined[name]
+        assert m["status"] == "combined" and m["source_view"] == "side"
+        assert m["value"] == pytest.approx(expected, abs=3.0)
+    assert combined["double_support_pct"]["eligible_views"] == ["side"]

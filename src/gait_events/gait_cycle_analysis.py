@@ -149,7 +149,9 @@ class GaitCycleAnalysis(BaseModel):
     method_version: str = METHOD_VERSION
     method: str = METHOD_DESCRIPTION
     status: str  # analysed | insufficient_data | not_supported_view
-    camera_view: str
+    camera_view: str  # view the analysis was run for
+    detected_view: Optional[str] = None  # automatic view-detector output
+    view_source: Optional[str] = None  # labelled | detected
     walking_direction: Optional[str] = None  # left_to_right | right_to_left
     direction_source: Optional[str] = None
     fps: Optional[float] = None
@@ -609,6 +611,55 @@ def aggregate(cycles: Sequence[GaitCycleRecord], events: Sequence[CycleEvent]) -
                                      reason=reasons[0] if reasons else "No valid cycles."))
         sub_summary[side] = rows
     return metrics, cadence, sub_summary
+
+
+# --------------------------------------------------------------------------- #
+# Integration helpers                                                         #
+# --------------------------------------------------------------------------- #
+
+LABELLED_VIEWS = ("front", "side", "rear")
+
+
+def apply_labelled_view(
+    analysis: GaitCycleAnalysis,
+    poses: Sequence[FramePose],
+    labelled_view: Optional[str],
+    fps: Optional[float] = None,
+) -> GaitCycleAnalysis:
+    """Prefer the view the user labelled at recording time over the automatic detector.
+
+    ``analysis`` was run with the detector's view. If a valid label exists and differs, the
+    analysis is re-run for the labelled view. A disagreement is reported as a warning.
+    """
+    detected = analysis.camera_view
+    if labelled_view not in LABELLED_VIEWS:
+        analysis.detected_view = detected
+        analysis.view_source = "detected"
+        return analysis
+    out = analysis if detected == labelled_view else analyze_gait_cycles(poses, labelled_view, fps)
+    out.detected_view = detected
+    out.view_source = "labelled"
+    if detected not in (None, "unknown", labelled_view):
+        out.warnings.append(
+            f"Recording is labelled '{labelled_view}' view but the automatic view detector suggested "
+            f"'{detected}'. Analysis follows the label; please verify the camera placement."
+        )
+    return out
+
+
+def cadence_for_assessment(analysis: Optional[GaitCycleAnalysis]) -> Optional[Tuple[float, float]]:
+    """(cadence steps/min, confidence) when the step-based cadence is well supported, else None.
+
+    Only used when the analysis has at least MIN_CYCLES_SUPPORTED confident steps, so the
+    assessment falls back to its legacy cadence for weak or unsupported recordings.
+    """
+    if analysis is None or analysis.status != "analysed" or analysis.cadence is None:
+        return None
+    c = analysis.cadence
+    if c.value is None or c.status != "estimated":
+        return None
+    confs = [e.confidence for e in analysis.events if e.event_type == "initial_contact" and not e.low_confidence]
+    return round(float(c.value), 1), round(float(np.mean(confs)), 3) if confs else 0.0
 
 
 # --------------------------------------------------------------------------- #

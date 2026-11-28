@@ -114,6 +114,7 @@ export interface MultiViewView {
     measurements: MultiViewMeasurement[]
     limitations: string[]
   } | null
+  gait_cycle_status?: 'analysed' | 'insufficient_data' | 'not_supported_view' | null
 }
 
 export interface CombinedMeasurement {

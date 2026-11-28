@@ -5,7 +5,7 @@ from src.api.auth.dependencies import get_current_user, verify_subject_access
 from src.api.schemas.api_responses import SessionResponse, PaginatedResponse
 from src.api.schemas.requests import SessionCreate, SessionViewsUpdate
 from src.assessment.multiview_summary import build_multiview_summary
-from src.database.models import AssessmentRecord, User
+from src.database.models import AssessmentRecord, GaitCycleAnalysisRecord, User
 from src.database.repositories import JobRepository, RecordingRepository, SessionRepository, SubjectRepository
 
 router = APIRouter(tags=["sessions"])
@@ -129,7 +129,16 @@ def get_multiview_assessment(
             .first()
         )
 
-    summary = build_multiview_summary(s, subject, recordings, _latest_job, _assessment)
+    def _gait_cycle(recording_id: str):
+        return (
+            db.query(GaitCycleAnalysisRecord)
+            .filter(GaitCycleAnalysisRecord.session_id == session_id,
+                    GaitCycleAnalysisRecord.recording_id == recording_id)
+            .order_by(GaitCycleAnalysisRecord.updated_at.desc())
+            .first()
+        )
+
+    summary = build_multiview_summary(s, subject, recordings, _latest_job, _assessment, _gait_cycle)
     if current_user.role == "individual":
         # Clinician-only approval details are not exposed to patient accounts.
         for v in summary["views"]:
