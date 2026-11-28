@@ -66,7 +66,7 @@ export default function SessionResultsPage({
 
     const pollJob = async () => {
       try {
-        const j = await jobsApi.getBySession(sessionId)
+        const j = await jobsApi.getBySession(sessionId, recordingId || undefined)
         if (!isMounted) return null
         setJob(j)
 
@@ -75,7 +75,7 @@ export default function SessionResultsPage({
         }
 
         if (j.status === 'completed') {
-          assessmentsApi.get(sessionId).then((ass) => isMounted && ass && setAssessment(ass)).catch(() => null)
+          assessmentsApi.get(sessionId, recordingId || undefined).then((ass) => isMounted && ass && setAssessment(ass)).catch(() => null)
           recordingsApi.list(sessionId).then((recs) => {
             if (isMounted && Array.isArray(recs)) {
               setRecordings(recs)
@@ -107,7 +107,7 @@ export default function SessionResultsPage({
       isMounted = false
       clearInterval(interval)
     }
-  }, [sessionId])
+  }, [sessionId, recordingId])
 
   const handleRetryJob = async () => {
     if (!job?.id) return
@@ -176,7 +176,7 @@ export default function SessionResultsPage({
 
   useEffect(() => {
     Promise.all([
-      assessmentsApi.get(sessionId).catch(() => null),
+      assessmentsApi.get(sessionId, recordingId || undefined).catch(() => null),
       sessionsApi.get(sessionId).catch(() => null),
       recordingsApi.list(sessionId).catch(() => [] as Recording[]),
     ])

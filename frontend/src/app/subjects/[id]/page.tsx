@@ -152,7 +152,11 @@ export default function SubjectDetailPage({
                     <span className="font-semibold text-sm text-slate-900">
                       {locale === 'vi' ? `Phiên #${sessions.length - idx}` : `Session #${sessions.length - idx}`}
                     </span>
-                    {sess.camera_view && (
+                    {sess.assessment_mode === 'multi_view' && sess.selected_views?.length ? (
+                      <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 text-[11px] font-medium capitalize">
+                        {locale === 'vi' ? 'Đa góc' : 'Multi-view'}: {sess.selected_views.join(' · ')}
+                      </span>
+                    ) : sess.camera_view && (
                       <span className="px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-medium capitalize">
                         {sess.camera_view} view
                       </span>
@@ -179,6 +183,24 @@ export default function SubjectDetailPage({
                   </div>
                 </div>
 
+                {sess.assessment_mode === 'multi_view' ? (
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <Link
+                    href={`/sessions/${sess.id}/record`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition"
+                  >
+                    <Video className="w-3.5 h-3.5 text-slate-600" />
+                    <span>{locale === 'vi' ? 'Tiếp tục ghi hình' : 'Resume Recording'}</span>
+                  </Link>
+                  <Link
+                    href={`/sessions/${sess.id}/multiview`}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition shadow-xs"
+                  >
+                    <span>{locale === 'vi' ? 'Đánh giá tổng hợp' : 'Combined Assessment'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+                ) : (
                 <div className="flex items-center gap-2 self-end sm:self-auto">
                   <Link
                     href={`/sessions/${sess.id}/upload`}
@@ -196,6 +218,7 @@ export default function SubjectDetailPage({
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
+                )}
               </div>
             ))
           )}

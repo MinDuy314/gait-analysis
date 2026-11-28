@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from sqlalchemy import or_
 from sqlalchemy.orm import Session as DBSession
 from src.database.models import (
     User, Subject, Session, Recording, AnalysisJob,
@@ -58,6 +59,18 @@ class SessionRepository:
             .offset(skip).limit(limit).all()
         )
 
+    def get_by_client_request_id(self, subject_id: str, client_request_id: str) -> Optional[Session]:
+        """Return an existing session created with the same idempotency key (prevents duplicates)."""
+        return (
+            self.db.query(Session)
+            .filter(
+                Session.subject_id == subject_id,
+                Session.client_request_id == client_request_id,
+                Session.is_deleted == False,
+            )
+            .first()
+        )
+
 
 class RecordingRepository:
     def __init__(self, db: DBSession):
@@ -73,8 +86,37 @@ class RecordingRepository:
     def get(self, recording_id: str) -> Optional[Recording]:
         return self.db.query(Recording).filter(Recording.id == recording_id, Recording.is_deleted == False).first()
 
-    def list_for_session(self, session_id: str) -> List[Recording]:
-        return self.db.query(Recording).filter(Recording.session_id == session_id, Recording.is_deleted == False).all()
+    def list_for_session(self, session_id: str, include_superseded: bool = True) -> List[Recording]:
+        q = self.db.query(Recording).filter(Recording.session_id == session_id, Recording.is_deleted == False)
+        if not include_superseded:
+            q = q.filter(or_(Recording.is_superseded == False, Recording.is_superseded.is_(None)))
+        return q.order_by(Recording.created_at.asc()).all()
+
+    def supersede_previous_for_view(self, session_id: str, camera_view: str, new_recording_id: str) -> int:
+        """Mark earlier active recordings of the same view as superseded by a retake.
+
+        Originals are never deleted or modified on disk; they remain retrievable for audit.
+        Returns the number of recordings superseded.
+        """
+        previous = (
+            self.db.query(Recording)
+            .filter(
+                Recording.session_id == session_id,
+                Recording.camera_view == camera_view,
+                Recording.id != new_recording_id,
+                Recording.is_deleted == False,
+                or_(Recording.is_superseded == False, Recording.is_superseded.is_(None)),
+            )
+            .all()
+        )
+        now = datetime.utcnow()
+        for r in previous:
+            r.is_superseded = True
+            r.superseded_at = now
+            r.superseded_by_id = new_recording_id
+        if previous:
+            self.db.commit()
+        return len(previous)
 
     def update_validation(
         self,
@@ -134,13 +176,11 @@ class JobRepository:
     def get(self, job_id: str) -> Optional[AnalysisJob]:
         return self.db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
 
-    def get_latest_for_session(self, session_id: str) -> Optional[AnalysisJob]:
-        return (
-            self.db.query(AnalysisJob)
-            .filter(AnalysisJob.session_id == session_id)
-            .order_by(AnalysisJob.created_at.desc())
-            .first()
-        )
+    def get_latest_for_session(self, session_id: str, recording_id: Optional[str] = None) -> Optional[AnalysisJob]:
+        q = self.db.query(AnalysisJob).filter(AnalysisJob.session_id == session_id)
+        if recording_id:
+            q = q.filter(AnalysisJob.recording_id == recording_id)
+        return q.order_by(AnalysisJob.created_at.desc()).first()
 
     def update_status(
         self,

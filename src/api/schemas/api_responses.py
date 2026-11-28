@@ -30,6 +30,8 @@ class SessionResponse(BaseModel):
     session_status: Optional[str] = "active"
     summary: Optional[str] = None
     notes: Optional[str] = None
+    assessment_mode: Optional[str] = None
+    selected_views: Optional[List[str]] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
@@ -45,6 +47,19 @@ class RecordingResponse(BaseModel):
     quality_status: Optional[str] = None
     measurement_confidence: Optional[float] = None
     analysis_warnings: Optional[List[str]] = None
+    original_filename: Optional[str] = None
+    validation_message: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    fps: Optional[float] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    camera_view: Optional[str] = None
+    recording_source: Optional[str] = None
+    recorded_at: Optional[datetime] = None
+    recording_metadata: Optional[dict] = None
+    is_superseded: Optional[bool] = False
+    superseded_at: Optional[datetime] = None
+    superseded_by_id: Optional[str] = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
