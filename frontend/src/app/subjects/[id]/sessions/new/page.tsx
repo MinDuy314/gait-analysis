@@ -1,11 +1,40 @@
 'use client'
 
-import React, { useState, use } from 'react'
+import React, { useState, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { sessionsApi } from '@/lib/api'
 import { useLanguage } from '@/context/LanguageContext'
-import { ArrowLeft, ChevronDown, ChevronUp, Play, Layers, AlertCircle } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, Play, Layers, AlertCircle, Video, Check } from 'lucide-react'
+import type { CameraView } from '@/types/api'
+
+const ALL_VIEWS: CameraView[] = ['front', 'side', 'rear']
+
+const VIEW_LABEL_EN: Record<CameraView, string> = { front: 'Front view', side: 'Side view', rear: 'Rear view' }
+const VIEW_LABEL_VI: Record<CameraView, string> = { front: 'Phía trước', side: 'Bên hông', rear: 'Phía sau' }
+
+const MODE_OPTIONS: {
+  value: 'single_view' | 'multi_view'
+  labelEn: string
+  labelVi: string
+  descEn: string
+  descVi: string
+}[] = [
+  {
+    value: 'single_view',
+    labelEn: 'Single view (upload video)',
+    labelVi: 'Một góc quay (tải video)',
+    descEn: 'Upload one existing walking video.',
+    descVi: 'Tải lên một video có sẵn.',
+  },
+  {
+    value: 'multi_view',
+    labelEn: 'Multi-view (front / side / rear)',
+    labelVi: 'Đa góc quay (trước / ngang / sau)',
+    descEn: 'Record or upload several views within this one session.',
+    descVi: 'Ghi hoặc tải nhiều góc quay trong cùng một phiên.',
+  },
+]
 
 export default function NewSessionPage({
   params,
@@ -16,6 +45,21 @@ export default function NewSessionPage({
   const subjectId = resolvedParams.id
   const router = useRouter()
   const { t, locale } = useLanguage()
+
+  // Assessment mode: existing single-view upload flow, or multi-view recording in one session
+  const [mode, setMode] = useState<'single_view' | 'multi_view'>('single_view')
+  const [selectedViews, setSelectedViews] = useState<CameraView[]>(['front', 'side', 'rear'])
+  // Idempotency key, created on first submit and reused for retries / double submits,
+  // so the backend returns the same session instead of creating a duplicate.
+  const clientRequestId = useRef<string | null>(null)
+
+  const toggleView = (v: CameraView) => {
+    setSelectedViews((prev) =>
+      prev.includes(v)
+        ? (prev.length === 1 ? prev : prev.filter((x) => x !== v))
+        : ALL_VIEWS.filter((x) => x === v || prev.includes(x))
+    )
+  }
 
   // Primary short form fields
   const [cameraView, setCameraView] = useState<'front' | 'side'>('front')
@@ -36,12 +80,24 @@ export default function NewSessionPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
+    if (!clientRequestId.current) {
+      clientRequestId.current =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    }
     setIsSubmitting(true)
     setError(null)
 
     const payload: any = {
-      camera_view: cameraView,
+      camera_view: mode === 'multi_view' ? selectedViews[0] : cameraView,
       walking_surface: walkingSurface || undefined,
+      client_request_id: clientRequestId.current,
+    }
+    if (mode === 'multi_view') {
+      payload.assessment_mode = 'multi_view'
+      payload.selected_views = selectedViews
     }
 
     if (walkingSpeed) payload.walking_speed_ms = parseFloat(walkingSpeed)
@@ -54,8 +110,8 @@ export default function NewSessionPage({
 
     try {
       const sess = await sessionsApi.create(subjectId, payload)
-      // Navigate straight to upload step
-      router.push(`/sessions/${sess.id}/upload`)
+      // Multi-view sessions go to the per-view recorder; single-view keeps the upload step
+      router.push(mode === 'multi_view' ? `/sessions/${sess.id}/record` : `/sessions/${sess.id}/upload`)
     } catch (err: any) {
       setError(err.response?.data?.detail || t('common.error'))
       setIsSubmitting(false)
@@ -97,6 +153,71 @@ export default function NewSessionPage({
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-700 block">
+                {locale === 'vi' ? 'Hình thức đánh giá' : 'Assessment type'} *
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup">
+                {MODE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={mode === opt.value}
+                    onClick={() => setMode(opt.value)}
+                    className={`p-3 rounded-xl border text-left transition ${
+                      mode === opt.value
+                        ? 'border-teal-600 bg-teal-50/70 text-teal-900 ring-1 ring-teal-600 font-semibold'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      {opt.value === 'multi_view' && <Video className="w-3.5 h-3.5" />}
+                      {locale === 'vi' ? opt.labelVi : opt.labelEn}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 font-normal">
+                      {locale === 'vi' ? opt.descVi : opt.descEn}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {mode === 'multi_view' && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 block">
+                  {locale === 'vi' ? 'Chọn các góc quay cần ghi' : 'Views to record'} *
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {ALL_VIEWS.map((v) => {
+                    const on = selectedViews.includes(v)
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleView(v)}
+                        className={`p-3 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition ${
+                          on
+                            ? 'border-teal-600 bg-teal-50/70 text-teal-900 ring-1 ring-teal-600'
+                            : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>{locale === 'vi' ? VIEW_LABEL_VI[v] : VIEW_LABEL_EN[v]}</span>
+                        {on && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {locale === 'vi'
+                    ? 'Tất cả các góc quay được lưu trong cùng một phiên. Bạn có thể lưu và quay tiếp sau.'
+                    : 'All views are stored in this one session. You can save and continue recording later.'}
+                </p>
+              </div>
+            )}
+
+            {mode === 'single_view' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 block">
                 {t('sessions.cameraView')} *
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -135,6 +256,7 @@ export default function NewSessionPage({
                 </button>
               </div>
             </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -281,7 +403,11 @@ export default function NewSessionPage({
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  <span>{locale === 'vi' ? 'Tiếp tục tải video' : 'Proceed to Upload'}</span>
+                  <span>
+                    {mode === 'multi_view'
+                      ? (locale === 'vi' ? 'Tiếp tục ghi hình' : 'Proceed to Recording')
+                      : (locale === 'vi' ? 'Tiếp tục tải video' : 'Proceed to Upload')}
+                  </span>
                   <Play className="w-3.5 h-3.5 fill-current" />
                 </>
               )}

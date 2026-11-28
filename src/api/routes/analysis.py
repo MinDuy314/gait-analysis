@@ -31,11 +31,17 @@ def submit_analysis(
         verify_subject_access(subj, current_user)
 
     recording_path = ""
+    recording_view = None
     if payload.recording_id:
         rec = RecordingRepository(db).get(payload.recording_id)
         if not rec:
             raise HTTPException(status_code=404, detail="Recording not found")
+        if rec.session_id != session_id:
+            raise HTTPException(status_code=400, detail="Recording does not belong to this session")
         recording_path = rec.file_path
+        recording_view = rec.camera_view
+
+    camera_view = payload.camera_view or recording_view or "side"
 
     job = JobRepository(db).create(
         session_id=session_id,
@@ -50,7 +56,7 @@ def submit_analysis(
         recording_path=recording_path,
         session_id=session_id,
         subject_id=sess.subject_id,
-        camera_view=payload.camera_view,
+        camera_view=camera_view,
         pose_model=payload.pose_model,
         recording_id=payload.recording_id,
     )

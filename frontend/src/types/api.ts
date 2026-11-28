@@ -37,7 +37,12 @@ export interface Session {
   walking_direction?: string
   footwear?: string
   calibration_status?: string
+  session_status?: string
+  assessment_mode?: 'single_view' | 'multi_view' | null
+  selected_views?: CameraView[] | null
 }
+
+export type CameraView = 'front' | 'side' | 'rear'
 
 export interface Recording {
   id: string
@@ -47,7 +52,105 @@ export interface Recording {
   validation_status: 'pending' | 'passed' | 'failed'
   annotated_video_path?: string
   annotation_status?: 'pending' | 'running' | 'completed' | 'failed'
+  original_filename?: string | null
+  duration_seconds?: number | null
+  camera_view?: CameraView | null
+  recording_source?: 'upload' | 'webcam' | null
+  recorded_at?: string | null
+  recording_metadata?: Record<string, unknown> | null
+  is_superseded?: boolean
+  superseded_by_id?: string | null
   created_at: string
+}
+
+export interface RecordingUploadMetadata {
+  camera_view?: CameraView
+  recording_source?: 'upload' | 'webcam'
+  recorded_at?: string
+  recording_metadata?: Record<string, unknown>
+}
+
+export type MultiViewViewStatus = 'missing' | 'recorded' | 'processing' | 'analysed' | 'failed'
+
+export interface MultiViewMeasurement {
+  feature_name: string
+  category?: string | null
+  value: number | null
+  unit: string
+  status: string
+  confidence: number | null
+}
+
+export interface MultiViewView {
+  camera_view: CameraView
+  selected: boolean
+  status: MultiViewViewStatus
+  retake_count: number
+  recording: {
+    id: string
+    recording_source?: string | null
+    original_filename?: string | null
+    recorded_at?: string | null
+    created_at?: string | null
+    duration_seconds?: number | null
+    validation_status?: string | null
+    validation_message?: string | null
+    quality_status?: string | null
+    measurement_confidence?: number | null
+    recording_metadata?: Record<string, unknown> | null
+  } | null
+  job: {
+    id: string
+    status: JobStatus
+    current_stage?: string | null
+    progress_pct: number
+    error_message?: string | null
+  } | null
+  assessment: {
+    assessment_id: string
+    overall_status?: string | null
+    analysed_camera_view?: string | null
+    view_mismatch: boolean
+    measurements: MultiViewMeasurement[]
+    limitations: string[]
+  } | null
+}
+
+export interface CombinedMeasurement {
+  feature_name: string
+  unit: string
+  status: 'combined' | 'conflicting' | 'insufficient_data'
+  value: number | null
+  source_view: CameraView | null
+  source_recording_id: string | null
+  confidence: number | null
+  eligible_views: CameraView[]
+  agreement?: 'consistent' | 'single_source'
+  note?: string
+  per_view: { camera_view: CameraView; value: number | null; status: string; confidence: number | null }[]
+}
+
+export interface MultiViewAssessment {
+  session_id: string
+  subject_id: string
+  subject_display_name?: string | null
+  session_created_at?: string | null
+  session_status?: string | null
+  assessment_mode: 'single_view' | 'multi_view'
+  selected_views: CameraView[]
+  recording_status: 'not_applicable' | 'not_started' | 'incomplete' | 'complete'
+  missing_views: CameraView[]
+  views: MultiViewView[]
+  unlabelled_recordings: { id: string; original_filename?: string | null }[]
+  combined: {
+    status: 'not_available' | 'processing' | 'partial' | 'complete'
+    analysed_views: CameraView[]
+    measurements: CombinedMeasurement[]
+    not_combined: { feature_name: string; unit: string; reason: string }[]
+    method: string
+    is_3d_reconstruction: boolean
+    limitations: string[]
+  }
 }
 
 export type JobStatus = 'queued' | 'running' | 'completed' | 'partially_completed' | 'failed' | 'cancelled'
@@ -209,6 +312,6 @@ export interface Paginated<T> {
 
 export interface AnalysisRequest {
   recording_id?: string
-  camera_view: 'front' | 'side'
+  camera_view?: CameraView
   pose_model: 'yolo'
 }

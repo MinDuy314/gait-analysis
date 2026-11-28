@@ -1,7 +1,8 @@
 import api from '@/lib/api-client'
 import type {
   TokenResponse, User, Subject, Session, Recording,
-  Job, Assessment, Report, Paginated, AnalysisRequest, LongitudinalProgress
+  Job, Assessment, Report, Paginated, AnalysisRequest, LongitudinalProgress,
+  CameraView, RecordingUploadMetadata, MultiViewAssessment
 } from '@/types/api'
 
 // ─── Auth ─────────────────────────────────────────────────────────────────
@@ -31,8 +32,12 @@ export const sessionsApi = {
   list: (subject_id: string, skip = 0, limit = 50) =>
     api.get<Paginated<Session>>(`/api/v1/subjects/${subject_id}/sessions`, { params: { skip, limit } }).then(r => r.data),
   get: (id: string) => api.get<Session>(`/api/v1/sessions/${id}`).then(r => r.data),
-  create: (subject_id: string, body: Partial<Session>) =>
+  create: (subject_id: string, body: Partial<Session> & { client_request_id?: string }) =>
     api.post<Session>(`/api/v1/subjects/${subject_id}/sessions`, body).then(r => r.data),
+  updateViews: (id: string, selected_views: CameraView[]) =>
+    api.patch<Session>(`/api/v1/sessions/${id}/views`, { selected_views }).then(r => r.data),
+  multiview: (id: string) =>
+    api.get<MultiViewAssessment>(`/api/v1/sessions/${id}/multiview`).then(r => r.data),
 }
 
 // ─── Recordings ───────────────────────────────────────────────────────────
@@ -42,9 +47,18 @@ export const recordingsApi = {
       Array.isArray(r.data) ? r.data : (r.data?.items || [])
     ),
   get: (id: string) => api.get<Recording>(`/api/v1/recordings/${id}`).then(r => r.data),
-  upload: (session_id: string, file: File, onProgress?: (pct: number) => void) => {
+  upload: (
+    session_id: string,
+    file: File,
+    onProgress?: (pct: number) => void,
+    metadata?: RecordingUploadMetadata
+  ) => {
     const form = new FormData()
     form.append('file', file)
+    if (metadata?.camera_view) form.append('camera_view', metadata.camera_view)
+    if (metadata?.recording_source) form.append('recording_source', metadata.recording_source)
+    if (metadata?.recorded_at) form.append('recorded_at', metadata.recorded_at)
+    if (metadata?.recording_metadata) form.append('recording_metadata', JSON.stringify(metadata.recording_metadata))
     return api.post<Recording>(`/api/v1/sessions/${session_id}/recordings`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
@@ -64,15 +78,18 @@ export const analysisApi = {
 // ─── Jobs ─────────────────────────────────────────────────────────────────
 export const jobsApi = {
   get: (id: string) => api.get<Job>(`/api/v1/jobs/${id}`).then(r => r.data),
-  getBySession: (sessionId: string) => api.get<Job>(`/api/v1/sessions/${sessionId}/job`).then(r => r.data),
+  getBySession: (sessionId: string, recordingId?: string) =>
+    api.get<Job>(`/api/v1/sessions/${sessionId}/job`, { params: recordingId ? { recording_id: recordingId } : undefined }).then(r => r.data),
   retry: (id: string) => api.post<Job>(`/api/v1/jobs/${id}/retry`).then(r => r.data),
   cancel: (id: string) => api.post(`/api/v1/jobs/${id}/cancel`).then(r => r.data),
 }
 
 // ─── Assessments ──────────────────────────────────────────────────────────
 export const assessmentsApi = {
-  get: (session_id: string) =>
-    api.get<Assessment>(`/api/v1/sessions/${session_id}/assessment`).then(r => r.data),
+  get: (session_id: string, recording_id?: string) =>
+    api.get<Assessment>(`/api/v1/sessions/${session_id}/assessment`, {
+      params: recording_id ? { recording_id } : undefined,
+    }).then(r => r.data),
 }
 
 // ─── Reports ──────────────────────────────────────────────────────────────

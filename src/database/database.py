@@ -62,6 +62,16 @@ def init_db(db_url: str = None):
         ("reports", "published_at DATETIME"),
         ("reports", "revision_history TEXT"),
         ("reports", "updated_at DATETIME"),
+        ("sessions", "assessment_mode TEXT"),
+        ("sessions", "selected_views TEXT"),
+        ("sessions", "client_request_id TEXT"),
+        ("recordings", "camera_view TEXT"),
+        ("recordings", "recording_source TEXT DEFAULT 'upload'"),
+        ("recordings", "recorded_at DATETIME"),
+        ("recordings", "recording_metadata TEXT"),
+        ("recordings", "is_superseded BOOLEAN DEFAULT 0"),
+        ("recordings", "superseded_at DATETIME"),
+        ("recordings", "superseded_by_id TEXT"),
     ]
     with engine.connect() as conn:
         for tbl_name, col_def in _migrations:

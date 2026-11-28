@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.api.dependencies import get_db
@@ -13,6 +14,7 @@ router = APIRouter(tags=["assessments"])
 @router.get("/api/v1/sessions/{session_id}/assessment")
 def get_assessment(
     session_id: str,
+    recording_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -24,9 +26,11 @@ def get_assessment(
         raise HTTPException(status_code=404, detail="Subject not found")
     verify_subject_access(subj, current_user)
 
-    record = db.query(AssessmentRecord).filter(
-        AssessmentRecord.session_id == session_id
-    ).order_by(AssessmentRecord.created_at.desc()).first()
+    query = db.query(AssessmentRecord).filter(AssessmentRecord.session_id == session_id)
+    if recording_id:
+        # Multi-view sessions hold one assessment per recording; allow selecting a specific one.
+        query = query.filter(AssessmentRecord.recording_id == recording_id)
+    record = query.order_by(AssessmentRecord.created_at.desc()).first()
     if not record:
         raise HTTPException(status_code=404, detail="No assessment found for this session")
 

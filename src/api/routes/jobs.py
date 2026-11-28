@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from src.api.dependencies import get_db, get_job_manager
@@ -29,10 +30,11 @@ def get_job(
 @router.get("/api/v1/sessions/{session_id}/job", response_model=JobResponse)
 def get_latest_session_job(
     session_id: str,
+    recording_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    j = JobRepository(db).get_latest_for_session(session_id)
+    j = JobRepository(db).get_latest_for_session(session_id, recording_id=recording_id)
     if not j:
         raise HTTPException(status_code=404, detail="No job found for this session")
     subj = SubjectRepository(db).get(j.subject_id)

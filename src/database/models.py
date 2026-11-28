@@ -52,6 +52,10 @@ class Session(Base):
     notes = Column(Text, nullable=True)
     session_status = Column(String, nullable=True, default="active")
     summary = Column(Text, nullable=True)
+    # Multi-view assessment (Feature 01). Null for legacy single-view sessions.
+    assessment_mode = Column(String, nullable=True)  # single_view | multi_view
+    selected_views = Column(JSON, nullable=True)  # e.g. ["front", "side", "rear"]
+    client_request_id = Column(String, nullable=True, index=True)  # idempotency key for session creation
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -80,6 +84,14 @@ class Recording(Base):
     quality_status = Column(String, nullable=True)  # valid, low_confidence, invalid, unavailable, pending
     measurement_confidence = Column(Float, nullable=True)
     analysis_warnings = Column(JSON, nullable=True)
+    # Multi-view assessment (Feature 01). Null camera_view = legacy single-view upload.
+    camera_view = Column(String, nullable=True)  # front | side | rear
+    recording_source = Column(String, nullable=True, default="upload")  # upload | webcam
+    recorded_at = Column(DateTime, nullable=True)  # client capture timestamp (UTC)
+    recording_metadata = Column(JSON, nullable=True)  # client-reported capture metadata (not measurements)
+    is_superseded = Column(Boolean, default=False)  # True once replaced by a retake of the same view
+    superseded_at = Column(DateTime, nullable=True)
+    superseded_by_id = Column(String, nullable=True)
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     session = relationship("Session", back_populates="recordings")
