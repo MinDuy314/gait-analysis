@@ -311,10 +311,12 @@ export interface Paginated<T> {
   limit: number
 }
 
+export type PoseModel = 'yolo' | 'mediapipe'
+
 export interface AnalysisRequest {
   recording_id?: string
   camera_view?: CameraView
-  pose_model: 'yolo'
+  pose_model: PoseModel
 }
 
 // ─── Gait-cycle analysis (Feature 02) ────────────────────────────────────

@@ -73,7 +73,15 @@ class AnalysisRequest(BaseModel):
     recording_id: Optional[str] = None
     # When omitted, the recording's labelled camera view is used, falling back to "side".
     camera_view: Optional[str] = None
-    pose_model: str = "yolo"
+    pose_model: str = "yolo"  # yolo | mediapipe (mediapipe tracks heel and toe)
+
+    @field_validator("pose_model")
+    @classmethod
+    def _validate_pose_model(cls, v):
+        v = (v or "yolo").strip().lower()
+        if v not in ("yolo", "mediapipe", "synthetic"):  # synthetic = test/demo generator
+            raise PydanticCustomError("pose_model", "pose_model must be 'yolo' or 'mediapipe'")
+        return v
 
 
 class ReportRequest(BaseModel):

@@ -56,6 +56,9 @@ def run_analysis_pipeline(
     **kwargs,
 ):
     """Full pipeline task. Executes real video pipeline and saves stage progress."""
+    if (pose_model or "").lower() in ("mediapipe", "mediapipe_pose") and pose_model_version == "v8n-pose":
+        from src.pose_estimation.mediapipe_estimator import MODEL_VERSION as _MP_VERSION
+        pose_model_version = _MP_VERSION
     repo = JobRepository(db)
     rec_repo = RecordingRepository(db)
     partial_results: Dict[str, Any] = {

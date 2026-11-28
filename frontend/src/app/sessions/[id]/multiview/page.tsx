@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback, use } from 'react'
 import Link from 'next/link'
 import { analysisApi, sessionsApi } from '@/lib/api'
 import { useLanguage } from '@/context/LanguageContext'
-import type { CameraView, MultiViewAssessment, MultiViewView } from '@/types/api'
+import type { CameraView, MultiViewAssessment, MultiViewView, PoseModel } from '@/types/api'
+import PoseModelSelect from '@/components/gait/PoseModelSelect'
 import {
   ArrowLeft,
   AlertCircle,
@@ -45,6 +46,7 @@ export default function MultiViewAssessmentPage({ params }: { params: Promise<{ 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState<string | null>(null)
+  const [poseModel, setPoseModel] = useState<PoseModel>('yolo')
   const [actionError, setActionError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -81,7 +83,7 @@ export default function MultiViewAssessmentPage({ params }: { params: Promise<{ 
       setSubmitting(v.camera_view)
       try {
         // Each view is analysed separately with its own labelled camera view.
-        await analysisApi.submit(sessionId, { recording_id: v.recording.id, camera_view: v.camera_view, pose_model: 'yolo' })
+        await analysisApi.submit(sessionId, { recording_id: v.recording.id, camera_view: v.camera_view, pose_model: poseModel })
       } catch (err) {
         setActionError(errDetail(err) || t('Could not start analysis.', 'Không thể bắt đầu phân tích.'))
         break
@@ -152,6 +154,12 @@ export default function MultiViewAssessmentPage({ params }: { params: Promise<{ 
           </button>
         </div>
       </div>
+
+      {pending.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 px-5 py-3 shadow-xs">
+          <PoseModelSelect value={poseModel} onChange={setPoseModel} isVi={isVi} disabled={submitting !== null} />
+        </div>
+      )}
 
       {actionError && (
         <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-700">

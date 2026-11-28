@@ -27,6 +27,12 @@ def create_pose_estimator(
     if est_lower in {"yolo", "ultralytics"}:
         logger.info("Initializing YOLOPoseEstimator on %s", device)
         return YOLOPoseEstimator(model_path=model_path, device=device)
+    elif est_lower in {"mediapipe", "mediapipe_pose"}:
+        # Explicitly requested: fail loudly rather than silently substituting YOLO,
+        # so stored results always reflect the model that actually produced them.
+        from src.pose_estimation.mediapipe_estimator import MediaPipePoseEstimator
+        logger.info("Initializing MediaPipePoseEstimator on cpu")
+        return MediaPipePoseEstimator()
     elif est_lower in {"synthetic", "mock", "test"}:
         logger.info("Initializing SyntheticPoseEstimator on %s", device)
         return SyntheticPoseEstimator(device=device)
